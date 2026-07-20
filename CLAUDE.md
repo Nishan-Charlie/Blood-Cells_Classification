@@ -18,14 +18,19 @@ Not a git repository. There is no version control here — be careful with destr
 src/
   config.py      paths, resolution, split fractions, augmentation strength
   hierarchy.py   the 18 classes, lineages, and index ordering  <- start here
-  download.py    Zenodo fetch, MD5 verify, extract
+  download.py    Zenodo fetch, MD5 verify, extract (retry + resume)
   manifest.py    build/verify the image manifest
   splits.py      deterministic stratified 70/15/15
-  transforms.py  288->224 pipeline, class-conditional augmentation
+  transforms.py  288->224 pipeline, class-conditional aug, RandAugment policies
   dataset.py     MLL23Dataset yielding (image, y1, y2)
+  mixing.py      hierarchical MixUp/CutMix (one lambda across both label levels)
+  stain.py       Macenko + Reinhard stain normalisation (fit on train only)
+  features.py    frozen-backbone embedding extraction for EDA
+  quality.py     per-image quality stats, near-duplicate detection, hierarchy tests
   viz.py         figures for the write-up
 notebooks/
-  01_data_preparation.ipynb   drives the above end to end; idempotent
+  01_data_preparation.ipynb   acquire, verify, split; idempotent
+  02_dataset_analysis.ipynb   hierarchy tests, stain norm, duplicate screen, aug demo
 artifacts/       generated figures
 ```
 
@@ -141,8 +146,20 @@ Under **identical data splits and backbones**:
 2. Full hierarchical model (proposed).
 3. Ablation — remove the imbalance term.
 4. Ablation — remove the hierarchy.
+5. *(added)* Stain-normalised input — the optional Macenko/Reinhard pipeline stage from `stain.py`.
 
-Significance via paired t-test across validation folds. All four configurations must stay runnable from the same codebase, which argues for a config-driven trainer rather than divergent per-variant scripts.
+Significance via paired t-test across validation folds. All configurations must stay runnable from the same codebase, which argues for a config-driven trainer rather than divergent per-variant scripts.
+
+### Empirical finding: the lineage hierarchy is *local, not global*
+
+Notebook 02 tested the central premise on frozen ImageNet-ResNet50 features (no fine-tuning), measured on a stratified sample:
+
+- Lineage **silhouette ≈ 0** — lineages do *not* form cleanly separable global clusters.
+- k-NN **lineage agreement ≈ 0.78** (well above the ~0.45 chance baseline) — a cell's neighbours usually share its lineage. The structure is real but *local*.
+- k-NN **fine-type agreement ≈ 0.42** — the fine level is markedly harder, which is exactly the gap the hierarchical design targets.
+- Same-lineage class centroids are **~1.2× closer** than cross-lineage ones.
+
+**Consequence for modelling and write-up:** a lineage-aware model that exploits *local neighbourhood* structure is justified; a method assuming separable lineage blobs is not. State both the support and the caveat — do not overclaim clean separability. These numbers move slightly between runs (seeded sampling); re-run notebook 02 rather than quoting from memory.
 
 ## Writing conventions in the .tex sources
 

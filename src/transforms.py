@@ -44,7 +44,7 @@ def eval_transform() -> v2.Compose:
     return v2.Compose([v2.ToImage(), *_finalise()])
 
 
-def train_transform(minority: bool = False) -> v2.Compose:
+def train_transform(minority: bool = False, *, policy: str = "basic") -> v2.Compose:
     """Augmenting pipeline for training.
 
     Args:
@@ -52,25 +52,40 @@ def train_transform(minority: bool = False) -> v2.Compose:
             jitter are scaled by ``config.MINORITY_AUG_MULTIPLIER``. Blood cells
             have no canonical orientation, so widening rotation toward a full
             circle is label-preserving rather than distorting.
+        policy: ``"basic"`` is the flip/rotate/jitter pipeline from the proposal.
+            ``"randaugment"`` and ``"trivialaugment"`` insert an automated policy
+            after the geometric transforms; both are stronger regularisers that
+            the augmentation-strategy ablation compares against ``"basic"``. The
+            automated policies subsume colour jitter, so it is dropped when one
+            is active to avoid stacking two colour perturbations.
     """
     scale = config.MINORITY_AUG_MULTIPLIER if minority else 1.0
     degrees = min(config.MAX_ROTATION_DEGREES * scale, 180.0)
     jitter = min(config.JITTER_STRENGTH * scale, 0.5)
 
-    return v2.Compose(
-        [
-            v2.ToImage(),
-            v2.RandomHorizontalFlip(p=0.5),
-            v2.RandomVerticalFlip(p=0.5),
-            v2.RandomRotation(
-                degrees=degrees,
-                interpolation=v2.InterpolationMode.BILINEAR,
-                fill=_ROTATION_FILL,
-            ),
-            v2.ColorJitter(brightness=jitter, contrast=jitter),
-            *_finalise(),
-        ]
-    )
+    geometric = [
+        v2.ToImage(),
+        v2.RandomHorizontalFlip(p=0.5),
+        v2.RandomVerticalFlip(p=0.5),
+        v2.RandomRotation(
+            degrees=degrees,
+            interpolation=v2.InterpolationMode.BILINEAR,
+            fill=_ROTATION_FILL,
+        ),
+    ]
+
+    if policy == "basic":
+        photometric = [v2.ColorJitter(brightness=jitter, contrast=jitter)]
+    elif policy == "randaugment":
+        # RandAugment operates on uint8; it must precede the float conversion in
+        # _finalise(). num_ops/magnitude scale up for minority classes.
+        photometric = [v2.RandAugment(num_ops=2 if not minority else 3, magnitude=9)]
+    elif policy == "trivialaugment":
+        photometric = [v2.TrivialAugmentWide()]
+    else:
+        raise ValueError(f"unknown augmentation policy {policy!r}")
+
+    return v2.Compose([*geometric, *photometric, *_finalise()])
 
 
 def is_minority(y2: int) -> bool:

@@ -23,6 +23,12 @@ LINEAGE_COLORS: dict[str, str] = {
     "Erythroid": "#e87ba4",
 }
 
+# Sequential blue ramp (reference palette, light->dark) for magnitude encodings
+# such as the inter-class distance heatmap. One hue, never a rainbow.
+SEQUENTIAL_BLUE = (
+    "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b",
+)
+
 SPLIT_COLORS: dict[str, str] = {
     "train": "#2a78d6",
     "val": "#008300",
@@ -175,5 +181,124 @@ def sample_grid(images, labels, *, ncols: int = 6, title: str | None = None):
         ax.axis("off")
     if title:
         fig.suptitle(title, fontsize=11, y=1.0)
+    fig.tight_layout()
+    return fig
+
+
+# --------------------------------------------------------------------------- #
+# Dataset-analysis figures (notebook 02)
+# --------------------------------------------------------------------------- #
+def _lineage_cmap():
+    """Discrete colormap over the three lineages, in fixed index order."""
+    from matplotlib.colors import ListedColormap
+
+    return ListedColormap([LINEAGE_COLORS[l] for l in LINEAGES])
+
+
+def embedding_scatter(coords, meta, *, colour_by: str = "lineage", method: str = "UMAP",
+                      title: str | None = None):
+    """2-D embedding coloured by lineage or fine class.
+
+    Lineage colouring uses the three fixed categorical hues and a legend, so
+    identity is never colour-alone. Fine-class colouring (18 classes) exceeds the
+    categorical cap, so it uses a lightness ramp *within* each lineage's hue and
+    is presented as an exploratory view, with the lineage panel as the one that
+    carries the argument.
+    """
+    fig, ax = plt.subplots(figsize=(8.4, 7.4))
+
+    if colour_by == "lineage":
+        y = meta["y1"].to_numpy()
+        for i, lin in enumerate(LINEAGES):
+            m = y == i
+            ax.scatter(coords[m, 0], coords[m, 1], s=6, alpha=0.55,
+                       color=LINEAGE_COLORS[lin], label=lin, linewidths=0)
+        ax.legend(loc="best", fontsize=10, labelcolor=INK_SECONDARY, markerscale=2)
+    else:
+        # Per-fine-class: hue by lineage, lightness by within-lineage rank.
+        from matplotlib.colors import to_rgb
+        for lin in LINEAGES:
+            members = [c for c in CLASSES if c.lineage == lin]
+            base = np.array(to_rgb(LINEAGE_COLORS[lin]))
+            for j, c in enumerate(members):
+                m = meta["y2"].to_numpy() == c.idx
+                shade = 0.35 + 0.6 * (j / max(len(members) - 1, 1))
+                ax.scatter(coords[m, 0], coords[m, 1], s=6, alpha=0.5,
+                           color=tuple(base * shade + (1 - shade) * 0.55), linewidths=0)
+
+    ax.set_xlabel(f"{method}-1"); ax.set_ylabel(f"{method}-2")
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.grid(False)
+    ax.set_title(title or f"{method} of frozen-backbone features, coloured by {colour_by}", pad=10)
+    fig.tight_layout()
+    return fig
+
+
+def distance_heatmap(dist: pd.DataFrame, *, title: str | None = None):
+    """Inter-class centroid-distance matrix as a sequential-blue heatmap.
+
+    Class order follows the maturation continuum, so a real hierarchy appears as
+    darker (nearer) blocks along the lineage diagonal.
+    """
+    from matplotlib.colors import LinearSegmentedColormap
+
+    cmap = LinearSegmentedColormap.from_list("seq_blue", SEQUENTIAL_BLUE[::-1])
+    fig, ax = plt.subplots(figsize=(10.5, 9))
+    im = ax.imshow(dist.to_numpy(), cmap=cmap, aspect="equal")
+
+    names = list(dist.index)
+    ax.set_xticks(range(len(names)), names, rotation=90, fontsize=7.5, color=INK_SECONDARY)
+    ax.set_yticks(range(len(names)), names, fontsize=7.5, color=INK_SECONDARY)
+
+    # Lineage boundaries as white gridlines: they demarcate the expected blocks.
+    lut = [c.lineage for c in CLASSES]
+    bounds = [i + 0.5 for i in range(len(lut) - 1) if lut[i] != lut[i + 1]]
+    for b in bounds:
+        ax.axhline(b, color=SURFACE, lw=2); ax.axvline(b, color=SURFACE, lw=2)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Euclidean distance between class centroids", color=INK_SECONDARY, fontsize=9)
+    ax.set_title(title or "Inter-class distance in feature space", pad=10)
+    fig.tight_layout()
+    return fig
+
+
+def quality_distributions(stats: pd.DataFrame, metrics=("brightness", "contrast", "saturation", "sharpness")):
+    """Per-lineage distributions of image-quality metrics as overlaid densities."""
+    fig, axes = plt.subplots(1, len(metrics), figsize=(4.0 * len(metrics), 4.2))
+    for ax, metric in zip(np.ravel(axes), metrics):
+        for lin in LINEAGES:
+            vals = stats.loc[stats.lineage == lin, metric].to_numpy()
+            if len(vals) < 2:
+                continue
+            lo, hi = np.percentile(vals, [1, 99])
+            grid = np.linspace(lo, hi, 200)
+            from scipy.stats import gaussian_kde
+            ax.plot(grid, gaussian_kde(vals)(grid), color=LINEAGE_COLORS[lin], lw=2, label=lin)
+        ax.set_title(metric, fontsize=10, color=INK_PRIMARY)
+        ax.set_yticks([]); ax.grid(axis="x", visible=True)
+    axes[0].legend(fontsize=8, labelcolor=INK_SECONDARY)
+    fig.suptitle("Image-quality metric distributions by lineage", fontsize=12, y=1.02)
+    fig.tight_layout()
+    return fig
+
+
+def stain_comparison(triples, *, title: str | None = None):
+    """Rows of (original, Macenko, Reinhard) for a handful of images.
+
+    Args:
+        triples: list of (original, macenko, reinhard) uint8 RGB arrays.
+    """
+    n = len(triples)
+    fig, axes = plt.subplots(n, 3, figsize=(3 * 2.1, n * 2.1))
+    axes = np.atleast_2d(axes)
+    heads = ["Original", "Macenko", "Reinhard"]
+    for r, (orig, mac, rein) in enumerate(triples):
+        for c, img in enumerate((orig, mac, rein)):
+            axes[r, c].imshow(img)
+            axes[r, c].axis("off")
+            if r == 0:
+                axes[r, c].set_title(heads[c], fontsize=10, color=INK_SECONDARY)
+    fig.suptitle(title or "Stain normalisation", fontsize=12, y=1.01)
     fig.tight_layout()
     return fig
