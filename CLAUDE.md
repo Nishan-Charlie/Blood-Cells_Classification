@@ -113,6 +113,8 @@ Within the myeloid branch the cell types are ordered along the **maturation cont
 ### Preprocessing pipeline
 
 1. **Resize/normalise** — 288×288 → **224×224 bilinear**, scale to [0,1], normalise with ImageNet stats: `mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]`.
+
+   > **Measured 2026-07-20:** MLL23's own channel means are `[0.742, 0.655, 0.781]` — brighter than ImageNet in every channel, widest in blue (0.781 vs 0.406), from the violet Pappenheim stain against a bright background. So after ImageNet normalisation the data centres near `[1.12, 0.89, 1.67]`, **not** zero. This is expected, not a bug: the pretrained backbones require inputs standardised the way they were trained. Do not "fix" the non-zero mean. Switching to dataset-specific statistics is a defensible alternative and worth reporting as such, but it trades away part of the transfer-learning benefit.
 2. **Hierarchical label mapping** — emit `[y1, y2]` per image.
 3. **Stratified split** — *deterministic* 70/15/15 train/val/test, guaranteeing rare populations (reactive lymphocytes, n=33) appear proportionally in every set. Seed it and persist the split.
 4. **Lineage-aware augmentation** — online random flips, rotation up to 90°, mild brightness/contrast jitter (0.1). **Training set only**, with an *intensified regime on minority classes*. Augmentation strength is class-conditional, not global.
