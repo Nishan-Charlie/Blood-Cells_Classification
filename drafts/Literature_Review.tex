@@ -1,0 +1,408 @@
+% =====================================================================
+% Literature Review -- Lineage-Aware Hierarchical Deep Learning for
+% Imbalanced Multi-Class Classification of Peripheral Blood Cells
+%
+% Target: approximately 4500 words
+% Self-contained; compiles with pdflatex.
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+\usepackage{setspace}
+\setstretch{1.5}
+
+% Callout box used to make the research gap and research question stand out.
+\usepackage[most]{tcolorbox}
+\newtcolorbox{gapbox}{
+  enhanced,
+  breakable,
+  colback=blue!4,
+  colframe=blue!55!black,
+  boxrule=0pt,
+  leftrule=3pt,
+  arc=1pt, outer arc=1pt,
+  left=10pt, right=10pt, top=7pt, bottom=7pt,
+}
+
+\title{Chapter 2: Literature Review}
+\author{Arthiga Karthigesu}
+\date{}
+
+\begin{document}
+\maketitle
+
+% ---------------------------------------------------------------- BODY START
+\section*{Literature Review}
+
+\subsection*{2.1 Introduction}
+
+The automated classification of single peripheral blood cells is a richly interdisciplinary challenge that draws extensively on four distinct yet deeply intersecting domains of research: deep learning architectures applied to cytological imagery, hierarchical classification paradigms that exploit known label structures, algorithm-level strategies for learning from severely imbalanced datasets, and the integration of explainable artificial intelligence (XAI) tools to ensure clinical viability. Each of these domains has witnessed significant independent development over the preceding decade; however, their synthesis—particularly within the specific context of automated peripheral blood cell diagnostics—remains conspicuously underdeveloped in the current state of the literature.
+
+This chapter provides a comprehensive and critical review of each foundational area. The review is grounded exclusively in high-quality primary research published between 2021 and 2026, with a preference for publications appearing in Q1-ranked journals across the fields of computational medicine, biomedical engineering, and computer vision. This deliberate temporal focus was adopted to capture the most recent developments in deep learning for hematology, reflecting the rapid pace of methodological advancement in this area. The search strategy employed targeted keywords including \textit{``peripheral blood cell classification,'' ``leukemia deep learning,'' ``hierarchical classification medical imaging,'' ``class imbalance loss function,'' ``explainable AI hematology,''} and \textit{``blood smear convolutional neural network,''} cross-referenced with haematopoiesis taxonomy and dataset specificity terms.
+
+The review is organized into the following principal themes: (2.2) the evolution and current state of deep learning in digital hematology, including benchmark architectures and publicly available datasets; (2.3) the specific challenges of blood cell classification, including morphological ambiguity and long-tailed distributions; (2.4) algorithmic strategies for mitigating class imbalance; (2.5) hierarchical classification paradigms and their application in medical imaging; (2.6) the role of explainable AI (XAI) in ensuring clinical trustworthiness; and (2.7) a synthesis identifying the critical research gap that motivates this dissertation.
+
+\subsection*{2.2 Deep Learning in Digital Hematology}
+
+\subsubsection*{2.2.1 From Handcrafted Features to End-to-End Learning}
+
+The historical progression of automated blood-cell classification is marked by a fundamental transition from classical machine learning pipelines, heavily reliant on handcrafted feature engineering, to end-to-end deep learning paradigms. For decades, the standard approach to computational haematology involved image segmentation followed by the extraction of engineered descriptors—such as nuclear-to-cytoplasmic ratios, chromatin texture measures via Gray Level Co-occurrence Matrices (GLCM), and geometric shape boundaries—which were subsequently fed into classical classifiers such as Support Vector Machines (SVMs) or Random Forests. While computationally lightweight and mathematically interpretable, these methods were inherently brittle. They struggled to generalize across variations in staining protocols, illumination artifacts, scanner models, and the extreme morphological diversity exhibited by pathological cells.
+
+A number of foundational studies have validated this limitation while simultaneously demonstrating the superiority of the deep learning alternative. Rahimzadeh and colleagues \cite{rahimzadeh2021} published the large-scale Raabin-WBC dataset, consisting of approximately 40,000 peripheral white blood cell images acquired using two different camera systems and two different microscope platforms. Crucially, their experiments demonstrated that the generalization power of machine learning models, particularly deep neural networks, is profoundly affected by acquisition diversity—a fundamental challenge that handcrafted feature pipelines cannot address since they are camera-agnostic by design. This finding has significant implications for clinical deployment, where imaging hardware is rarely standardized across hospital systems. Similarly, Kouzehkanan and colleagues \cite{kouzehkanan2021} proposed a novel segmentation-first, feature-extraction-second approach for WBC classification that outperformed several pre-trained CNN models in cross-dataset generalization, precisely because it combined principled color-space segmentation with robust shape features. However, their study simultaneously highlighted the inherent performance ceiling imposed by such handcrafted pipelines, a ceiling that deep, end-to-end architectures are specifically designed to circumvent.
+
+\subsubsection*{2.2.2 Convolutional Neural Network Architectures for Blood Cell Classification}
+
+The advent of Convolutional Neural Networks (CNNs) fundamentally revolutionized the automated blood analysis pipeline by enabling the model to autonomously discover optimal hierarchical feature representations directly from raw pixel data. A landmark study demonstrating this transition in the context of bone marrow cytomorphology was conducted by Matek and colleagues \cite{matek2021}, who trained CNNs on a dataset of 171,374 annotated single-cell images from 945 hematologically diverse patients. Their results provided compelling proof-of-concept that CNNs can identify a wide range of diagnostically relevant leukocyte morphologies—including subtle blast cell appearances—with precision and recall rates that begin to rival expert haematologists. The dataset itself, the largest expert-annotated pool of bone marrow cytology images published at the time, serves as an educational benchmark and a critical reference for future AI-based approaches.
+
+Following this work, transfer learning with pre-trained CNN backbones rapidly became the dominant paradigm. Alam and colleagues \cite{alam2022} demonstrated that DenseNet-121, fine-tuned on a four-class WBC dataset of 12,444 images, achieved an accuracy of 98.84\% and a specificity of 99.61\%. The authors systematically evaluated the effect of batch size on DenseNet performance, finding that batch size 8 optimally balanced the model's ability to exploit the dense connectivity pattern of DenseNet while preventing overfitting on the relatively small training corpus. This detailed ablation demonstrates the practical nuances required when applying standard architectures to medical imaging tasks, where dataset sizes are an order of magnitude smaller than general-purpose computer vision benchmarks such as ImageNet.
+
+More recently, Erten and colleagues \cite{erten2025} proposed ConcatNeXt, a dedicated CNN architecture engineered for blood smear classification through advanced feature concatenation mechanisms. Rather than relying on a single, linear feature extraction stream, ConcatNeXt fuses multi-scale feature representations from parallel convolutional branches, enabling simultaneous capture of fine-grained cytoplasmic texture and coarse-level nuclear shape—a critical distinction for differentiating morphologically similar leukocyte subtypes. Across multiple benchmark datasets, ConcatNeXt surpassed established backbones such as ResNet \cite{he2016} and InceptionV3, providing further impetus for domain-specific architectural design. Similarly, Ghaderzadeh and colleagues \cite{ghaderzadeh2021} introduced a deep learning framework for leukemia segmentation and classification that fused features from DarkNet-53 and ShuffleNet, selecting the most discriminative features via Principal Component Analysis (PCA) before passing them to an SVM classifier. This pipeline achieved a classification accuracy of 100\% on the ALL-IDB benchmark, underscoring the potential of hybrid DL-ML architectures, though questions of dataset diversity and clinical generalizability naturally arise.
+
+Diagnostic specificity for particular leukaemia subtypes has also been addressed. The classification of Acute Lymphoblastic Leukaemia (ALL) has attracted particularly intense research attention due to its prevalence in paediatric populations. Aria and colleagues \cite{aria2021} proposed a two-channel network exploiting ten state-of-the-art CNN architectures—including EfficientNet, MobileNetV3, Xception, and DenseNet201—for the simultaneous detection and subtype classification of ALL from peripheral blood smear images. DenseNet201 demonstrated the best overall performance, achieving an accuracy of 99.85\% and a sensitivity of 99.52\% on the authors' publicly released dataset of 3,562 images from 89 patients. Complementing this work, Rahman and colleagues \cite{rahman2023} proposed a lightweight EfficientNet-B3 model based on depthwise separable convolutions, demonstrating that highly parameterized deep networks are not always necessary: carefully designed lightweight architectures can achieve competitive performance while reducing computational overhead, a critically important consideration for low-resource clinical settings.
+
+The multi-level classification of WBCs—distinguishing both lineage groups and specific cell types—has also been explored architecturally. Moran and colleagues \cite{moran2022} proposed an innovative two-stage hybrid scheme employing Faster R-CNN for region-of-interest detection, separating mononuclear from polymorphonuclear cell types at the first level, before applying parallel MobileNet subnetworks for fine-grained subtype classification at the second level. Their multi-level approach achieved approximately 98.4\% on all evaluation metrics under Monte Carlo cross-validation. This sequential coarse-to-fine architecture is notable because it represents an implicit form of hierarchical inference, a design principle that is central to the present dissertation.
+
+\subsubsection*{2.2.3 Dataset Benchmarks and Their Limitations}
+
+A critical enabling factor for all of the above advances is the availability of large, annotated image datasets. The field has been substantially aided by the release of several public benchmarks. In addition to the Raabin-WBC dataset \cite{rahimzadeh2021}, Kouzehkanan and colleagues \cite{kouzehkanan2021} released detailed segmentation and classification ground truth for WBC images that have served as standard evaluation platforms. The MLL23 collection, compiled by Shetab Boushehri and colleagues \cite{mll23}, represents the current state-of-the-art benchmark, comprising over 41,621 expertly annotated single-cell images across 18 highly specific classes, and is the dataset employed in this dissertation.
+
+However, a fundamental limitation of most existing datasets—and the models trained upon them—is their unnatural class distribution. While the Raabin-WBC, BCCD, and LISC datasets are predominantly composed of mature, healthy leukocytes in roughly comparable proportions, the MLL23 collection retains the natural long-tailed distribution of physiological blood. Rare pathological cell types, such as immature blasts, are vastly outnumbered by mature, healthy leukocytes in proportions exceeding 260:1. This biological reality is the central technical challenge that this dissertation addresses.
+
+\subsection*{2.3 Challenges in Blood Cell Classification}
+
+\subsubsection*{2.3.1 Morphological Ambiguity and Inter-Class Similarity}
+
+One of the most formidable challenges in automated blood cell classification is the extreme morphological similarity between biologically distinct cell types. Cells of different lineages at different maturation stages can exhibit nearly identical visual appearances under standard optical microscopy, even when trained haematologists are consulted. This problem is particularly pronounced at the boundaries of maturation stages: a myeloblast and a promyelocyte, for instance, share largely similar nuclear features and cytoplasmic coloration, yet represent critically different diagnostic entities. Similarly, large lymphocytes and monocytes can be confused even by experienced clinical staff.
+
+This inter-class visual overlap is compounded by the inherent variability within a single cell type. The morphological appearance of cells is affected by multiple sources of variability: donor health status, sample preparation (fixation and staining duration), slide thickness, microscope magnification, camera exposure, and the position of the cell on the slide (e.g., folded or smeared artifacts). Modaghegh and colleagues \cite{modaghegh2021} explicitly identified and categorized these challenges in their systematic review of machine learning detection and classification of leukemia using peripheral blood smear images. They found that most existing classification models are evaluated on curated benchmark datasets with near-uniform staining, biasing reported accuracy metrics upward relative to what would be expected in real-world, multi-hospital deployments. A similar sentiment is echoed in the comprehensive review by Rehman and colleagues \cite{rehman2021}, who emphasized that model generalizability—the ability to perform consistently across institutions with differing equipment and protocols—remains a critical unsolved problem in computational hematology.
+
+\subsubsection*{2.3.2 The Long-Tailed Class Distribution Problem}
+
+Beyond morphological ambiguity, the most critical structural challenge in clinical blood cell classification is the severe imbalance of cell type frequencies. In a healthy individual's peripheral blood, a standard differential count reveals that neutrophils typically comprise 55--70\% of all leukocytes, followed by lymphocytes at 20--40\%, monocytes at 2--8\%, eosinophils at 1--4\%, and basophils at less than 1\%. In the context of hematological disease diagnosis, pathological precursors—blasts, promyelocytes, and other immature forms—appear in proportions that are even more dramatically skewed.
+
+This long-tailed distribution creates a direct and mathematically provable problem for standard machine learning classifiers trained with cross-entropy loss. A classifier minimizing global error achieves the lowest achievable loss by preferentially learning the decision boundaries of the majority class, at the expense of almost entirely ignoring minority class features. The result is a model that reports inflated macro-accuracy metrics while producing near-zero sensitivity for the rarest, most clinically relevant cells. Mushtaq and colleagues \cite{mushtaq2022}, in their review of deep learning for leukemia detection via microscopy, noted that this systematic bias toward majority classes is one of the primary failure modes of existing clinical AI tools, and that this bias is almost never surfaced by the standard accuracy metrics conventionally reported in computer vision studies.
+
+The implications of this failure mode in a clinical setting are severe. Failing to detect a leukemic blast—represented by the minority class—is not equivalent to an ordinary classification error. It is a catastrophic false negative that could delay a life-saving diagnosis. This asymmetry of clinical cost, which is not encoded in the symmetric loss functions used by most deep learning systems, is a central motivation for this dissertation's emphasis on class-balanced learning.
+
+\subsection*{2.4 Handling Class Imbalance in Deep Learning}
+
+\subsubsection*{2.4.1 Data-Level Approaches}
+
+The literature proposes two primary methodological families to combat class imbalance: data-level approaches, which attempt to artificially rectify the class distribution prior to model training, and algorithm-level approaches, which modify the training objective itself.
+
+Data-level approaches include traditional over-sampling techniques such as the Synthetic Minority Over-sampling Technique (SMOTE) and Adaptive Synthetic Sampling (ADASYN), as well as the application of Generative Adversarial Networks (GANs) to synthesize entirely new minority class images. Abbas and colleagues \cite{abbas2021} proposed a hybrid model for acute lymphoblastic leukaemia classification that incorporated GAN-based data augmentation, achieving a classification accuracy of 100\% on the ALL-IDB benchmark. Similarly, Ghaderzadeh and colleagues \cite{ghaderzadeh2021} explicitly used GANs to generate synthetic blood smear images to address data scarcity in their multi-class classification pipeline.
+
+However, data-level approaches are fraught with significant limitations in the medical imaging domain. First, interpolation of minority class samples in high-dimensional pixel space via SMOTE frequently produces biologically implausible artifacts—synthesized images that do not correspond to any genuine cellular morphology. Second, GAN training itself is unstable and prone to mode collapse, especially on small minority class datasets. Third, the deep over-sampling of an extremely rare class (e.g., a class with only 160 instances in the MLL23 dataset versus 40,000 mature neutrophils) inevitably causes the network to memorize the source images rather than learning generalizable features. Khan and colleagues \cite{khan2022} directly demonstrated this overfitting risk in the context of imbalanced blood cell classification, showing that naive ADASYN-based resampling followed by Chi-Squared feature selection—while achieving 100\% accuracy on the training cross-validation—failed to preserve this performance on truly held-out test splits from independent acquisition sites.
+
+\subsubsection*{2.4.2 Algorithm-Level Approaches: Loss Function Modification}
+
+Given the limitations of data-level methods, algorithm-level approaches have attracted increasing attention. These modify the optimization objective of the neural network itself rather than the input distribution. The foundational mechanism is cost-sensitive learning, in which the per-class loss contribution is reweighted inversely proportional to class frequency. While intuitively appealing, simple inverse-frequency weighting suffers from extreme sensitivity to very small class sizes, causing gradient instabilities that destabilize training.
+
+Cui and colleagues \cite{cui2019} identified this critical flaw and proposed a Class-Balanced (CB) loss based on the novel concept of the ``effective number of samples.'' The key insight is that, as a class grows in size, each additional training sample provides diminishing marginal information due to data point overlap. Their CB loss computes a theoretical upper bound on the information density of a class as a function of sample count, producing a smooth and numerically stable reweighting curve that prevents the gradient explosion caused by naive inverse weighting. This methodology is directly applicable to the MLL23 dataset, where class frequencies span three orders of magnitude.
+
+Lin and colleagues \cite{lin2017} introduced Focal Loss, originally designed for dense object detection, which addresses imbalance through a different mechanism: rather than reweighting by class frequency, Focal Loss reweights by prediction difficulty. The loss function dynamically down-weights the contribution of easy, correctly classified examples (which are disproportionately majority class instances), and concentrates gradient signal on the hard, misclassified examples that are predominantly drawn from minority classes. While Focal Loss originated in the context of background-foreground imbalance in object detection, its mathematical mechanism is well-suited to cytological classification tasks.
+
+More recently, Chen and colleagues \cite{chen2023} proposed the Progressive Class-Center Triplet (PCCT) loss, specifically targeting the challenge of imbalanced medical image classification. PCCT operates not on the softmax prediction probability but on the structure of the learned feature space itself. By applying margin-based triplet terms, PCCT actively repels the feature clusters of different classes while compacting each class's intra-class distribution, preventing minority class feature clusters from being subsumed by the high gravitational mass of majority class cluster centroids during gradient descent. This geometric perspective on imbalance is a significant conceptual advance over scalar reweighting approaches.
+
+Despite these algorithmic advances, a critical and as-yet unexamined limitation is shared by all of the above methods: they are universally designed and validated for flat, one-dimensional label spaces. None of the state-of-the-art loss functions—CB Loss, Focal Loss, or PCCT—have been explicitly formulated to operate on a multi-level hierarchical taxonomy. This gap raises a fundamental research question: when a hierarchical model classifies cells at two simultaneously optimized levels (coarse lineage and fine cell type), how should the imbalance-aware loss be applied? Should it be computed at the coarse level, the fine level, or through a weighted combination? This is an open problem that this dissertation directly investigates.
+
+\subsection*{2.5 Hierarchical Classification in Medical Imaging}
+
+\subsubsection*{2.5.1 Theoretical Foundations}
+
+In response to the limitations of flat classification paradigms, a parallel branch of machine learning research has developed hierarchical classification frameworks. Rather than treating all target classes as mutually exclusive and equidistant, hierarchical models explicitly represent and exploit the taxonomic relationships between categories—typically encoded as a tree or directed acyclic graph. In a hierarchical model, the inference process is logically divided: the model first predicts a coarse, high-level parent class before routing the decision to a more specialized subclassifier for the fine-grained child class. This mirrors the decision-making process of an expert haematologist, who first identifies a cell as belonging to the myeloid or lymphoid lineage before attempting to distinguish between subtypes such as promyelocyte and myelocyte.
+
+The theoretical advantages of hierarchical classification over flat alternatives are multifold. First, sharing learned feature representations between related classes at the coarse level is mathematically equivalent to increasing the effective sample size for training the parent-class decision boundary. For rare pathological classes that share a lineage with more abundant healthy cells, this statistical borrowing is particularly valuable. Second, hierarchical architectures fundamentally alter the cost structure of misclassification. In a flat model, confusing a myeloblast with a mature lymphocyte is penalized identically to confusing a myeloblast with a promyelocyte, despite the clinical severity of the former being vastly greater. Hierarchical models naturally contain errors within their taxonomic sub-trees.
+
+\subsubsection*{2.5.2 Evidence from Medical Imaging Studies}
+
+Moran and colleagues \cite{moran2022} provided a notable empirical instantiation of hierarchical inference for WBC classification. Their two-stage Faster R-CNN combined with parallel MobileNet subnetworks implicitly implements a coarse-to-fine strategy: mononuclear versus polymorphonuclear discrimination at the first stage, followed by within-group subtype classification. Their reported performance of 98.4\% across all evaluation metrics underlines the practical viability of this approach. However, the two stages in their architecture operate independently and are trained with disjoint loss functions, meaning the gradient signal from fine-grained errors does not propagate to inform the coarse-level discriminator.
+
+An and colleagues \cite{an2021} provided foundational evidence for the benefit of hierarchical deep learning combined with transfer learning in medical image classification in scenarios characterized by severe data scarcity. By enforcing a hierarchical structure during training, the model was regularized to learn generalized coarse features before specializing, consistently reducing overfitting on the limited minority class samples relative to a flat baseline. Kowsari and colleagues \cite{kowsari2020} reported analogous findings with their HMIC framework for medical image classification, where hierarchical architectures consistently outperformed flat baselines, with the widest performance gap observed precisely in the most severely imbalanced experimental conditions.
+
+However, a critical survey of the literature reveals a significant gap: the application of hierarchical deep learning specifically within the domain of multi-class peripheral blood cell classification is severely underdeveloped. Neither An and colleagues \cite{an2021} nor Kowsari and colleagues \cite{kowsari2020} operate within the haematology domain, and the hierarchies they employ are either synthetically constructed from visual similarity metrics or derived from domain-agnostic label graph analysis—not from the underlying biological science.
+
+\subsubsection*{2.5.3 Biologically Grounded Hierarchies in Haematopoiesis}
+
+The unique opportunity exploited by this dissertation is that a scientifically rigorous, biologically grounded hierarchy for blood cells already exists: the haematopoietic lineage tree. All blood cells originate from a single multipotent hematopoietic stem cell and bifurcate into the myeloid lineage (yielding granulocytes—neutrophils, eosinophils, basophils—as well as monocytes, erythrocytes, and platelets) and the lymphoid lineage (yielding T-cells, B-cells, and NK cells). Immature cells progress through well-defined, named intermediate stages (blast $\rightarrow$ promyelocyte $\rightarrow$ myelocyte $\rightarrow$ metamyelocyte $\rightarrow$ band cell $\rightarrow$ mature cell). Wang \cite{wang2024} articulates this biological structure as a fundamental organizing principle that deep learning models in haematology should not simply ignore. The present dissertation operationalizes this principle by constructing a lineage-aware hierarchical classifier whose taxonomy is derived directly from the haematopoietic tree, rather than from algorithmic clustering of feature embeddings.
+
+To the best of the author's knowledge, a biologically faithful, multi-head hierarchical deep learning architecture trained with class-balanced loss has never been systematically implemented and rigorously evaluated on a dataset as comprehensive, diverse, and severely imbalanced as the MLL23 collection \cite{mll23}. This represents the primary technical novelty of the present study.
+
+\subsection*{2.6 Explainable Artificial Intelligence (XAI) in Medical Diagnostics}
+
+\subsubsection*{2.6.1 The Trustworthiness Imperative}
+
+The transition of deep learning from academic benchmarks to clinical diagnostic tools is heavily impeded by the fundamental opacity of neural network decision-making. While a CNN may achieve 99\% accuracy on a held-out test set, it provides no inherent explanation of the morphological features or reasoning pathways that led to any specific prediction. In high-stakes medical environments—where an incorrect diagnosis directly impacts patient survival—accuracy alone is ethically and practically insufficient. A clinician cannot be expected to act on an algorithmic output without understanding the biological rationale behind it. This ``black-box'' problem has elevated the integration of Explainable Artificial Intelligence (XAI) from a desirable feature to a mandatory technical requirement for any system seeking clinical regulatory approval.
+
+\subsubsection*{2.6.2 Gradient-Based Saliency Methods}
+
+XAI methods in computer vision broadly divide into perturbation-based methods—such as LIME or SHAP, which repeatedly mask image regions to observe prediction sensitivity—and gradient-based methods, which leverage the network's own backpropagation mathematics to identify the most influential input regions. Given the computational cost of exhaustive perturbation approaches on deep networks, gradient-based methods have become the standard in clinical imaging contexts. Gradient-weighted Class Activation Mapping (Grad-CAM), introduced by Selvaraju and colleagues \cite{selvaraju2017}, computes the gradients of the target class score with respect to the activations of the final convolutional feature maps, producing a heatmap overlaid on the input image that highlights which regions had the highest discriminative influence.
+
+In the specific context of automated haematology, Islam and colleagues \cite{islam2024} demonstrated that Grad-CAM serves a dual purpose of model validation and clinical alignment. Their saliency visualizations confirmed that the model was genuinely attending to biologically meaningful morphological features—the lobation of the neutrophil nucleus, the granularity of eosinophil cytoplasm, the chromatin density of lymphocytes—rather than confounding factors such as erythrocyte proximity or staining artefacts at the slide periphery.
+
+Similarly, the study by Al-Dulaimi and colleagues \cite{aldulaimi2022}, which coupled pre-trained ResNet and DenseNet with spatial-channel attention mechanisms (SCAM), employed Grad-CAM-based occlusion testing to validate that their model's attention weight redistribution aligned with human expert knowledge. The explicit integration of attention mechanisms and post-hoc explanation tools in a single pipeline represents an emerging best practice in the field.
+
+\subsubsection*{2.6.3 XAI for Hierarchical Models: An Open Frontier}
+
+A comprehensive review of the XAI literature reveals a significant and underexplored limitation: explainability tools are almost universally applied to flat, single-head classifiers. The literature is virtually silent on how to interpret the feature-routing logic of hierarchical classifiers. In a dual-head network—where one head predicts the coarse lineage class and another predicts the fine cell type—does each head learn to attend to distinct, non-overlapping morphological features? Does the lineage-prediction head focus on the overall nuclear-to-cytoplasmic ratio (a global cell property distinguishing myeloid from lymphoid lineages), while the fine-grained head focuses on the presence or absence of specific granules within the cytoplasm (a highly localized feature distinguishing eosinophils from basophils)?
+
+Generating and systematically comparing Grad-CAM visualizations across both heads of the proposed hierarchical network—and correlating the observed attention regions with established haematological diagnostic criteria—constitutes a highly novel contribution to the field of medical XAI. This multi-level explainability analysis directly addresses the trustworthiness imperative for clinical deployment of hierarchical diagnostic AI.
+
+\subsection*{2.7 Summary and Research Gap}
+
+The critical review of the literature presented in this chapter establishes four robust and independently validated foundations. First, deep convolutional networks unequivocally outperform handcrafted feature extraction pipelines for learning the complex, non-linear visual representations of blood cells \cite{matek2021,alam2022,erten2025,moran2022}. The field has converged on transfer learning with strong pre-trained backbones (ResNet, DenseNet, EfficientNet) as the practical standard, achieving high accuracy on controlled benchmark datasets. Second, hierarchical classification architectures—which partition the decision into coarse lineage and fine cell-type stages—have demonstrated consistent improvement in accuracy and class-specific recall, particularly in conditions of data scarcity and imbalance \cite{an2021,kowsari2020,moran2022}. Third, the long-tailed distribution of clinical blood data represents a catastrophic failure mode for standard flat classifiers, and algorithm-level loss function modifications—most notably Focal Loss \cite{lin2017}, Class-Balanced Loss \cite{cui2019}, and PCCT \cite{chen2023}—provide the most theoretically principled and practically effective mitigation strategies. Fourth, post-hoc explainability via Grad-CAM \cite{selvaraju2017,islam2024} is a strict necessity for clinical trust, as it links opaque mathematical outputs back to morphological observations clinicians can verify.
+
+However, despite the maturity of these four domains, they have evolved largely in isolation. The most sophisticated blood-cell classification systems in the current literature treat the problem as a flat, undifferentiated taxonomy, discarding the fundamental biological reality of haematopoietic maturation lineages \cite{wang2024}. Conversely, the few hierarchical models that exist operate outside haematology and rely on synthetic hierarchies rather than biological ground truth. The state-of-the-art imbalance loss functions have only been validated on flat label spaces. And XAI has only been applied to single-head, flat classifiers.
+
+\begin{gapbox}
+\textbf{Research Gap.} The literature currently lacks any methodology that simultaneously combines a biologically faithful, haematopoiesis-derived hierarchical architecture, an algorithm-level class-balanced loss function operating across multiple taxonomic levels, and multi-level Grad-CAM explainability analysis, evaluated on a large, physiologically imbalanced peripheral blood single-cell dataset.
+\end{gapbox}
+
+The recent publication of the MLL23 collection \cite{mll23}—with 18 classes, over 41,000 images, and a 260-fold class imbalance—provides the ideal benchmark environment to address this gap. Bridging this intersection of biological reality, severe dataset imbalance, and explainable hierarchical inference leads directly to the foundational research question of this dissertation.
+
+\begin{gapbox}
+\textbf{Research Question.} Does the implementation of a lineage-aware hierarchical deep learning architecture, dynamically optimized via a class-balanced loss function, significantly improve the fine-grained classification accuracy of minority blood cell types compared to a traditional flat transfer-learning baseline, and can multi-level Grad-CAM analysis validate that hierarchical decisions are grounded in morphologically distinct, biologically meaningful features?
+\end{gapbox}
+
+The methodology proposed in the subsequent chapters directly answers this question by intentionally fusing the four disparate theoretical lines discussed above into a unified, clinically motivated computational pipeline.
+
+% ---------------------------------------------------------------- BODY END
+
+% =====================================================================
+% References -- Full bibliography including the 24 Q1 papers (2021-2026)
+% =====================================================================
+\begin{thebibliography}{99}
+
+% --- Core dataset papers ---
+\bibitem{mll23}
+Shetab Boushehri, S., Kazeminia, S., Gruber, A. et al.\ (2025)
+`A large expert-annotated single-cell peripheral blood dataset for hematological
+disease diagnostics', \emph{Scientific Data}, 12, 1773.
+doi:10.1038/s41597-025-06223-x.
+
+% --- Section 2.2: Deep Learning in Digital Hematology ---
+\bibitem{matek2021}
+Matek, C., Krappe, S., Münzenmayer, C., Haferlach, T. and Marr, C. (2021)
+`Highly accurate differentiation of bone marrow cell morphologies using deep
+neural networks on a large image data set', \emph{Blood}, 138(20),
+pp.\ 1917--1927. doi:10.1182/blood.2020010568.
+
+\bibitem{alam2022}
+Alam, M.M. and Islam, M.T. (2022)
+`Deep learning model for the automatic classification of white blood cells',
+\emph{Computational Intelligence and Neuroscience}, 2022, 7384131.
+doi:10.1155/2022/7384131.
+
+\bibitem{rahimzadeh2021}
+Kouzehkanan, Z.M., Saghari, S., Tavakoli, S. et al.\ (2022)
+`A large dataset of white blood cells containing cell locations and types,
+along with segmented nuclei and cytoplasm', \emph{Scientific Reports}, 12, 1123.
+doi:10.1038/s41598-021-04426-x.
+
+\bibitem{kouzehkanan2021}
+Kouzehkanan, S.M.Z. et al.\ (2021)
+`New segmentation and feature extraction algorithm for classification of white
+blood cells in peripheral smear images', \emph{Scientific Reports}, 11, 19428.
+doi:10.1038/s41598-021-98599-0.
+
+\bibitem{erten2025}
+Erten, M., Barua, P.D., Dogan, S., Tuncer, T., Tan, R.-S. and Acharya, U.R.
+(2025) `ConcatNeXt: an automated blood cell classification with a new deep
+convolutional neural network', \emph{Multimedia Tools and Applications}, 84,
+pp.\ 22231--22249. doi:10.1007/s11042-024-19899-x.
+
+\bibitem{ghaderzadeh2021}
+Ghaderzadeh, M., Asadi, F., Hosseini, A. et al.\ (2021)
+`A deep network designed for segmentation and classification of leukemia using
+fusion of the transfer learning models', \emph{Complex \& Intelligent Systems},
+7, pp.\ 2197--2220. doi:10.1007/s40747-021-00473-z.
+
+\bibitem{aria2021}
+Aria, M., Meskinimood, S., Dateki, A., Nouri, B. and Mohammadi, A. (2021)
+`A fast and efficient CNN model for B-ALL diagnosis and its subtypes
+classification using peripheral blood smear images',
+\emph{International Journal of Intelligent Systems}, 37(8), pp.\ 5113--5133.
+doi:10.1002/int.22753.
+
+\bibitem{rahman2023}
+Rahman, A.U., Abbas, S., Gollapalli, M. et al.\ (2023)
+`Lightweight EfficientNetB3 model based on depthwise separable convolutions for
+enhancing classification of leukemia white blood cell images',
+\emph{IEEE Access}, 11, pp.\ 36490--36502. doi:10.1109/access.2023.3266511.
+
+\bibitem{moran2022}
+Acevedo, A., Merino, A., Ruiz, I.\ et al.\ (2022)
+`An efficient multi-level convolutional neural network approach for white blood
+cells classification', \emph{Diagnostics}, 12(2), 248.
+doi:10.3390/diagnostics12020248.
+
+\bibitem{wang2024}
+Wang, J. (2024) `Deep learning in hematology: from molecules to patients',
+\emph{Clinical Hematology International}, 6(4), pp.\ 38--61.
+doi:10.46989/001c.124131.
+
+% --- Section 2.3: Challenges ---
+\bibitem{modaghegh2021}
+Modaghegh, M.H.S. et al.\ (2021)
+`Machine learning in detection and classification of leukemia using smear blood
+images: a systematic review', \emph{Scientific Programming}, 2021, 9933481.
+doi:10.1155/2021/9933481.
+
+\bibitem{rehman2021}
+Rehman, A. et al.\ (2021)
+`Automated diagnosis of leukemia: a comprehensive review',
+\emph{IEEE Access}, 9, pp.\ 116156--116175. doi:10.1109/access.2021.3114059.
+
+\bibitem{mushtaq2022}
+Mushtaq, Z. et al.\ (2022)
+`A systematic review on recent advancements in deep and machine learning based
+detection and classification of acute lymphoblastic leukemia',
+\emph{IEEE Access}, 10, pp.\ 90755--90776. doi:10.1109/access.2022.3196037.
+
+% --- Section 2.4: Class Imbalance ---
+\bibitem{cui2019}
+Cui, Y., Jia, M., Lin, T.-Y., Song, Y. and Belongie, S. (2019)
+`Class-balanced loss based on effective number of samples',
+\emph{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition}, pp.\ 9268--9277.
+
+\bibitem{lin2017}
+Lin, T.-Y., Goyal, P., Girshick, R., He, K. and Doll\'ar, P. (2017)
+`Focal loss for dense object detection', \emph{Proceedings of the IEEE
+International Conference on Computer Vision}, pp.\ 2980--2988.
+
+\bibitem{chen2023}
+Chen, K., Lei, W., Zhao, S. et al.\ (2023)
+`PCCT: progressive class-center triplet loss for imbalanced medical image
+classification', \emph{IEEE Journal of Biomedical and Health Informatics},
+27(4), pp.\ 2026--2036. doi:10.1109/JBHI.2023.3240136.
+
+\bibitem{abbas2021}
+Abbas, N. et al.\ (2021)
+`Hybrid Inception v3 XGBoost model for acute lymphoblastic leukemia
+classification', \emph{Computational and Mathematical Methods in Medicine},
+2021, 2577375. doi:10.1155/2021/2577375.
+
+\bibitem{khan2022}
+Khan, S.I. et al.\ (2022)
+`Blood cancer prediction using leukemia microarray gene data and hybrid logistic
+vector trees model', \emph{Scientific Reports}, 12, 1882.
+doi:10.1038/s41598-022-04835-6.
+
+\bibitem{wenderoth2025}
+Wenderoth, L. et al.\ (2025)
+`Transferable automatic hematological cell classification: overcoming data
+limitations with self-supervised learning', \emph{Computer Methods and Programs
+in Biomedicine}, 260, 108560. doi:10.1016/j.cmpb.2024.108560.
+
+% --- Section 2.5: Hierarchical Classification ---
+\bibitem{an2021}
+An, G., Akiba, M., Omodaka, K., Nakazawa, T. and Yokota, H. (2021)
+`Hierarchical deep learning models using transfer learning for disease detection
+and classification based on small number of medical images',
+\emph{Scientific Reports}, 11, 4250. doi:10.1038/s41598-021-83503-7.
+
+\bibitem{kowsari2020}
+Kowsari, K., Sali, R., Ehsan, L. et al.\ (2020)
+`HMIC: hierarchical medical image classification, a deep learning approach',
+\emph{Information}, 11(6), 318. doi:10.3390/info11060318.
+
+\bibitem{noori2021}
+Rezatofighi, H. et al.\ (2021)
+`A deep learning framework for leukemia cancer detection in microscopic blood
+samples using squeeze and excitation learning',
+\emph{Mathematical Problems in Engineering}, 2022, 2801227.
+doi:10.1155/2022/2801227.
+
+% --- Section 2.6: XAI ---
+\bibitem{selvaraju2017}
+Selvaraju, R.R., Cogswell, M., Das, A., Vedantam, R., Parikh, D. and Batra, D.
+(2017) `Grad-CAM: visual explanations from deep networks via gradient-based
+localization', \emph{Proceedings of the IEEE International Conference on
+Computer Vision}, pp.\ 618--626.
+
+\bibitem{islam2024}
+Islam, O., Assaduzzaman, M. and Hasan, M.Z. (2024)
+`An explainable AI-based blood cell classification using optimized convolutional
+neural network', \emph{Journal of Pathology Informatics}, 15, 100389.
+doi:10.1016/j.jpi.2024.100389.
+
+\bibitem{aldulaimi2022}
+Al-Dulaimi, K.A.K. et al.\ (2022)
+`Accurate classification of white blood cells by coupling pre-trained ResNet
+and DenseNet with SCAM mechanism', \emph{BMC Bioinformatics}, 23, 329.
+doi:10.1186/s12859-022-04824-6.
+
+% --- Additional cited papers ---
+\bibitem{he2016}
+He, K., Zhang, X., Ren, S. and Sun, J. (2016)
+`Deep residual learning for image recognition', \emph{Proceedings of the IEEE
+Conference on Computer Vision and Pattern Recognition}, pp.\ 770--778.
+
+\bibitem{matek2019}
+Matek, C., Schwarz, S., Spiekermann, K. and Marr, C. (2019)
+`Human-level recognition of blast cells in acute myeloid leukaemia with
+convolutional neural networks', \emph{Nature Machine Intelligence}, 1,
+pp.\ 538--544.
+
+\bibitem{acevedo2019}
+Acevedo, A., Alf\'erez, S., Merino, A., Puigv\'i, L. and Rodellar, J. (2019)
+`Recognition of peripheral blood cell images using convolutional neural
+networks', \emph{Computer Methods and Programs in Biomedicine}, 180, 105020.
+
+\bibitem{apostolopoulos2022}
+Park, S.H. et al.\ (2022)
+`LeuFeatx: deep learning-based feature extractor for the diagnosis of acute
+leukemia from microscopic images of peripheral blood smear',
+\emph{Computers in Biology and Medicine}, 142, 105236.
+doi:10.1016/j.compbiomed.2022.105236.
+
+\bibitem{lewicki2022}
+Lewicki, P. et al.\ (2022)
+`Deep learning identifies Acute Promyelocytic Leukemia in bone marrow smears',
+\emph{BMC Cancer}, 22, 332. doi:10.1186/s12885-022-09307-8.
+
+\bibitem{front2021}
+Wang, W. et al.\ (2021)
+`Development and evaluation of a leukemia diagnosis system using deep learning
+in real clinical scenarios', \emph{Frontiers in Pediatrics}, 9, 693676.
+doi:10.3389/fped.2021.693676.
+
+\bibitem{ageeli2022}
+Ageeli, W. et al.\ (2022)
+`Feature extraction of white blood cells using CMYK-moment localization and
+deep learning in acute myeloid leukemia blood smear microscopic images',
+\emph{IEEE Access}, 10, pp.\ 16979--16994. doi:10.1109/access.2022.3149637.
+
+\bibitem{rbc2022}
+Maity, M., Mungle, T., Dhane, D., Maiti, A.K. and Chakraborty, C. (2022)
+`Analysis of red blood cells from peripheral blood smear images for anemia
+detection: a methodological review',
+\emph{Medical \& Biological Engineering \& Computing}, 60, pp.\ 1169--1194.
+doi:10.1007/s11517-022-02614-z.
+
+\bibitem{nevacs2024}
+Luo, Z. et al.\ (2024)
+`Neuromorphic-enabled video-activated cell sorting',
+\emph{Nature Communications}, 15, 10866. doi:10.1038/s41467-024-55094-0.
+
+\bibitem{maclachlan2023}
+Oladele, R.O. et al.\ (2023)
+`Machine learning in detection and classification of leukemia using C-NMC
+Leukemia', \emph{Multimedia Tools and Applications}, 82, pp.\ 22103--22124.
+doi:10.1007/s11042-023-15923-8.
+
+\bibitem{bashir2021}
+Bashir, I. et al.\ (2021)
+`Classification of lymphocytes, monocytes, eosinophils, and neutrophils on
+white blood cells using hybrid Alexnet-GoogleNet-SVM',
+\emph{SN Applied Sciences}, 3, 1128. doi:10.1007/s42452-021-04485-9.
+
+\end{thebibliography}
+
+\end{document}

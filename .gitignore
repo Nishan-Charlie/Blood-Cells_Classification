@@ -1,0 +1,42 @@
+# --- LaTeX intermediates (PDFs are kept; they are the deliverable) -----------
+*.aux
+*.log
+*.out
+*.nav
+*.snm
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+
+# --- Data --------------------------------------------------------------------
+# The MLL23 corpus lives on D:\ and is never committed (~10 GB, CC BY 4.0,
+# redistributable from Zenodo). Derived manifests live beside it.
+data/
+*.tif
+*.tiff
+*.zip
+
+# --- Models and runs ---------------------------------------------------------
+checkpoints/
+runs/
+lightning_logs/
+wandb/
+*.pt
+*.pth
+*.ckpt
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+.env
+
+# --- OS ----------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store

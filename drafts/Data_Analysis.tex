@@ -1,0 +1,69 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{float}
+\geometry{margin=1in}
+
+\title{Data Analysis Section \\ \large Lineage-Aware Hierarchical Deep Learning for Imbalanced Multi-Class Classification of Peripheral Blood Cells}
+\author{Arthiga Karthigesu}
+\date{July 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Data Analysis}
+
+This section details the methodologies and procedures used for analyzing the MLL23 single-cell blood image dataset. The analysis strategy is designed to rigorously evaluate the effectiveness of the proposed lineage-aware hierarchical deep learning model, particularly concerning the classification of highly imbalanced cell types.
+
+\subsection{Dataset Description and Exploration}
+
+The primary dataset for this study is the MLL23 dataset, which consists of 41,621 single-cell images categorized into 18 distinct peripheral blood cell classes. Initial exploratory data analysis (EDA) revealed a severe class imbalance, with approximately a 260-fold disparity between the majority and minority classes. 
+
+To address this computationally, a two-level label hierarchy was formulated:
+\begin{itemize}
+    \item \textbf{Level 1 (Lineage):} Broad categorization (e.g., Myeloid, Lymphoid).
+    \item \textbf{Level 2 (Fine Cell Type):} Specific cell identification (e.g., myeloblast, promyelocyte, normal lymphocyte).
+\end{itemize}
+Understanding this distribution is critical as the scarcity of certain immature cells directly impacts the model's ability to learn generalized features for those specific classes.
+
+\subsection{Data Pre-processing and Augmentation}
+
+Given the varying morphological properties and lighting conditions inherent in blood smears, several pre-processing steps were applied prior to model ingestion:
+\begin{enumerate}
+    \item \textbf{Normalization:} Images were resized to a standard dimension compatible with the selected backbones (e.g., $224 \times 224$ for ResNet and MobileNet, $384 \times 384$ for Vision Transformers) and normalized using ImageNet mean and standard deviation metrics.
+    \item \textbf{Stratified Sampling:} The dataset was split into training, validation, and testing sets (e.g., 70-15-15) using a stratified approach to ensure that even the rarest cell types are represented across all subsets.
+    \item \textbf{Class-Balanced Augmentation:} To mitigate the severe class imbalance, dynamic data augmentation techniques (such as random rotations, flips, and color jitter) were applied more heavily to minority classes, artificially increasing their representation during the training phase.
+\end{enumerate}
+
+\subsection{Experimental Setup and Model Training}
+
+The proposed framework utilizes a shared transfer-learning backbone (comparing MobileNet, ResNet, ConvNeXt, and ViT) attached to two distinct classification heads corresponding to the lineage and fine-cell types. 
+The training incorporates a \textit{class-balanced hierarchical loss function}, penalizing the model more heavily for inter-lineage misclassifications and errors on rare cell types. The optimization was tracked using cross-entropy loss over epochs, with early stopping implemented to prevent overfitting based on validation performance.
+
+\subsection{Evaluation Metrics}
+
+Due to the extreme dataset imbalance, relying solely on standard accuracy is insufficient and potentially misleading. Therefore, the models were evaluated using the following robust metrics:
+\begin{itemize}
+    \item \textbf{Macro F1-Score:} This provides an unweighted mean of the F1-scores calculated per class, ensuring that minority classes influence the final score equally to majority classes.
+    \item \textbf{Balanced Accuracy:} Computed as the arithmetic mean of sensitivity (true positive rate) and specificity (true negative rate), offering a more realistic view of the classifier's performance on rare cells.
+    \item \textbf{Hierarchical Confusion Matrix:} Beyond a standard confusion matrix, errors were analyzed structurally to determine if misclassifications remained within the correct biological lineage, which is clinically less severe than cross-lineage errors.
+\end{itemize}
+
+\subsection{Explainability and Visualization (Grad-CAM)}
+
+To ensure clinical trustworthiness and address the ``black-box'' nature of deep learning, Gradient-weighted Class Activation Mapping (Grad-CAM) was integrated into the analysis pipeline. Saliency maps were generated for test images to verify that the models were focusing on biologically relevant regions (such as chromatin texture, nucleus shape, and cytoplasm ratios) rather than background artifacts. 
+
+\subsection{Ablation Studies}
+
+An ablation study was conducted to quantify the specific contributions of the proposed novelties. The performance of the complete lineage-aware model was systematically compared against:
+\begin{itemize}
+    \item A standard flat baseline classifier (ignoring hierarchical taxonomy).
+    \item The model without the class-balanced loss weighting.
+\end{itemize}
+Statistical significance between these configurations was assessed using a paired t-test on the evaluation metrics across multiple validation folds.
+
+\end{document}
