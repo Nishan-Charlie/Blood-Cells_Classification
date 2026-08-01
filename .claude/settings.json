@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"D:/MLL23\" 2>&1; echo \"---INTERIM---\"; ls -la \"D:/MLL23/interim\" 2>&1; echo \"---RAW---\"; ls \"D:/MLL23/raw\" 2>&1 | head -30)",
+      "Read(//d/MLL23/**)",
+      "Bash(python -c ' *)",
+      "Bash(conda env *)",
+      "Bash(C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe -c ' *)",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" \"C:/Users/nisha/AppData/Local/Temp/claude/c--Users-nisha-Desktop-Freelance-Research/ae884425-3e2e-4c95-afd4-1d32abe4c9b8/scratchpad/bench.py\")",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -u \"C:/Users/nisha/AppData/Local/Temp/claude/c--Users-nisha-Desktop-Freelance-Research/ae884425-3e2e-4c95-afd4-1d32abe4c9b8/scratchpad/bench.py\")",
+      "Bash(powershell -c 'Get-PSDrive C,D | Select Name,@{n='\\\\''UsedGB'\\\\'';e={[math]::Round\\($_.Used/1GB,1\\)}},@{n='\\\\''FreeGB'\\\\'';e={[math]::Round\\($_.Free/1GB,1\\)}}')",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -u scripts/build_caches.py)",
+      "Bash(echo \"EXIT=$?\")"
+    ]
+  }
+}
