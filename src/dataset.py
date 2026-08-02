@@ -50,7 +50,7 @@ class MLL23Dataset(Dataset):
     """
 
     def __init__(self, df: pd.DataFrame, *, train: bool = False, transform=None,
-                 cache_path: Path | None = None) -> None:
+                 cache_path: Path | None = None, aug_policy: str = "basic") -> None:
         # Capture the manifest row positions *before* reset_index discards them;
         # these are what index into the cache.
         self._cache_path = Path(cache_path) if cache_path is not None else None
@@ -67,8 +67,8 @@ class MLL23Dataset(Dataset):
             self._fixed = None
             # Built once, not per __getitem__, which would rebuild the compose
             # object 41k times per epoch.
-            self._majority = T.train_transform(minority=False)
-            self._minority = T.train_transform(minority=True)
+            self._majority = T.train_transform(minority=False, policy=aug_policy)
+            self._minority = T.train_transform(minority=True, policy=aug_policy)
         else:
             self._fixed = T.eval_transform()
             self._majority = self._minority = None

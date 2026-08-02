@@ -28,7 +28,6 @@ explicitly so the write-up cannot lose it.
 from __future__ import annotations
 
 import argparse
-import itertools
 from dataclasses import replace
 
 import pandas as pd
@@ -53,9 +52,10 @@ def screen_configs(epochs: int = 6) -> list[ExperimentConfig]:
             arm=f"screen_{b}", backbone=b, mode="hier",
             use_hierarchy=True, use_imbalance=True,
             epochs=epochs, seed=0,
-            # Patience must not exceed the epoch budget, or early stopping can
-            # never fire and the "patience" is decorative.
-            early_stop_patience=epochs,
+            # Fixed budget so the cosine schedule completes; every backbone then
+            # gets the same anneal and the comparison is on the backbone alone.
+            use_early_stopping=False,
+            use_ema=True, tta=True,
         )
         for b in SCREEN_BACKBONES
     ]
@@ -87,9 +87,24 @@ ARMS: dict[str, dict] = {
 }
 
 
-def main_configs(backbone: str = "resnet", epochs: int = 20,
+def main_configs(backbone: str = "resnet", epochs: int = 30,
                  seeds: tuple[int, ...] = SEEDS) -> list[ExperimentConfig]:
-    """Phase 2: every arm at every seed, on one backbone."""
+    """Phase 2: every arm at every seed, on one backbone.
+
+    The defaults here encode four corrections to the first matrix, which was
+    invalid for reasons unrelated to the methods under test:
+
+    * **Early stopping off, fixed budget.** The cosine schedule is defined over
+      ``epochs``; stopping early truncated the anneal, leaving runs at up to 86%
+      of peak LR. Run length then correlated with score at r = +0.87, so the arm
+      ranking largely measured the stopping rule rather than the method.
+    * **Weight EMA on.** Raw validation macro-F1 moved by sd ~0.021 between
+      consecutive epochs while the effects under study were 0.008-0.028.
+    * **TTA on.** Four flip views; blood cells have no canonical orientation.
+    * **Stronger augmentation and mixing.** Training loss reached 0.005 against
+      a validation plateau of 0.84 - the model was memorising, and the two
+      regularisers already implemented were never switched on.
+    """
     return [
         ExperimentConfig(
             arm=arm, backbone=backbone, epochs=epochs, seed=seed,
@@ -97,6 +112,13 @@ def main_configs(backbone: str = "resnet", epochs: int = 20,
             use_hierarchy=spec["use_hierarchy"],
             use_imbalance=spec["use_imbalance"],
             stain_norm=spec["stain_norm"],
+            aug_policy="randaugment",
+            mix_kind="cutmix",
+            mix_prob=0.5,
+            mix_alpha=1.0,      # CutMix convention; MixUp would use ~0.2
+            use_ema=True,
+            tta=True,
+            use_early_stopping=False,
         )
         for arm, spec in ARMS.items()
         for seed in seeds
@@ -153,14 +175,13 @@ def main() -> None:
     elif args.phase == "main":
         cfgs = main_configs(
             backbone=args.backbone,
-            epochs=args.epochs or 20,
+            epochs=args.epochs or 30,
             seeds=tuple(args.seeds) if args.seeds else SEEDS,
         )
     else:
         # Smoke: one tiny run of each arm to prove every code path executes.
         cfgs = [
-            replace(c, epochs=2, limit_train=600, early_stop_patience=2,
-                    arm=f"smoke_{c.arm}")
+            replace(c, epochs=2, limit_train=600, arm=f"smoke_{c.arm}")
             for c in main_configs(epochs=2, seeds=(0,))
         ]
 

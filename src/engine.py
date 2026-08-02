@@ -65,7 +65,7 @@ class ExperimentConfig:
     stain_norm: bool = False      # True -> read the Reinhard cache (arm 5)
 
     seed: int = 0
-    epochs: int = 20
+    epochs: int = 30
     batch_size: int = 64
     lr: float = 3e-4
     weight_decay: float = 0.05
@@ -77,13 +77,75 @@ class ExperimentConfig:
     mix_prob: float = 0.5
     mix_alpha: float = 0.2
 
+    #: Exponential moving average of the weights, evaluated instead of the raw
+    #: model. The raw validation macro-F1 swings by sd ~0.021 epoch to epoch -
+    #: larger than the between-arm differences being measured - so without
+    #: smoothing, checkpoint selection is closer to a lottery than a decision.
+    use_ema: bool = True
+    ema_decay: float = 0.999
+
+    #: Test-time augmentation: average predictions over the four flip
+    #: combinations. Blood cells have no canonical orientation, so flips are
+    #: strictly label-preserving and the average is over genuine equivalents.
+    tta: bool = True
+
     #: Cap on training rows, for smoke tests only. None uses the full split.
     limit_train: int | None = None
-    early_stop_patience: int = 6
+
+    #: Early stopping is OFF by default, and this is deliberate.
+    #:
+    #: The cosine schedule is defined over ``epochs``. Stopping early therefore
+    #: truncates the anneal: an earlier matrix configured 50 epochs but stopped
+    #: at 12-37, leaving runs at up to 86% of peak LR - mid-training, not
+    #: converged. Worse, how long a run survived then correlated with its score
+    #: at r = +0.87, so the arm ranking largely measured luck in the stopping
+    #: rule rather than the method.
+    #:
+    #: If enabled, patience is applied to an EMA-smoothed metric (see fit) so a
+    #: single noisy epoch cannot end a run, and the schedule is rebuilt over the
+    #: expected stopping point.
+    use_early_stopping: bool = False
+    early_stop_patience: int = 15
 
     @property
     def run_id(self) -> str:
         return f"{self.arm}__{self.backbone}__seed{self.seed}"
+
+
+class ModelEma:
+    """Exponential moving average of model weights.
+
+    Keeps a shadow copy updated as ``ema = decay*ema + (1-decay)*live`` after
+    every optimiser step, and evaluates *that* rather than the live weights.
+
+    This is the cheapest available fix for the dominant problem in the earlier
+    matrix: validation macro-F1 fluctuated with sd ~0.021 between consecutive
+    epochs while the effects under study were 0.008-0.028. Averaging over the
+    trajectory suppresses that noise, so both the selected checkpoint and the
+    reported number reflect the model's actual level rather than which epoch
+    happened to land well.
+
+    Buffers (BatchNorm running statistics, where present) are copied rather than
+    averaged - they are already running estimates, and averaging them twice
+    distorts them.
+    """
+
+    def __init__(self, model: torch.nn.Module, decay: float = 0.999) -> None:
+        import copy
+
+        self.decay = decay
+        self.module = copy.deepcopy(model).eval()
+        for p in self.module.parameters():
+            p.requires_grad_(False)
+
+    @torch.no_grad()
+    def update(self, model: torch.nn.Module) -> None:
+        for ema_p, live_p in zip(self.module.state_dict().values(),
+                                 model.state_dict().values()):
+            if ema_p.dtype.is_floating_point:
+                ema_p.mul_(self.decay).add_(live_p.detach(), alpha=1.0 - self.decay)
+            else:
+                ema_p.copy_(live_p)  # integer buffers, e.g. num_batches_tracked
 
 
 def set_seed(seed: int) -> None:
@@ -129,7 +191,11 @@ def build_loaders(cfg: ExperimentConfig, split_df: pd.DataFrame) -> dict[str, Da
             sub = pd.concat(parts)  # concat preserves the index, i.e. the cache rows
 
         is_train = split == "train"
-        ds = MLL23Dataset(sub, train=is_train, cache_path=cache_path)
+        # aug_policy must be passed through: it was previously a config field
+        # that nothing read, so every run silently trained on the "basic" policy
+        # regardless of what its config claimed.
+        ds = MLL23Dataset(sub, train=is_train, cache_path=cache_path,
+                          aug_policy=cfg.aug_policy)
         loaders[split] = DataLoader(
             ds,
             batch_size=cfg.batch_size,
@@ -142,7 +208,8 @@ def build_loaders(cfg: ExperimentConfig, split_df: pd.DataFrame) -> dict[str, Da
     return loaders
 
 
-def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rng) -> dict:
+def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rng,
+                    *, ema: "ModelEma | None" = None) -> dict:
     """One pass over the training split. Returns mean loss components."""
     model.train()
     running: dict[str, float] = {}
@@ -188,6 +255,11 @@ def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rn
         scaler.step(optimiser)
         scaler.update()
 
+        # Update the shadow weights after every step, not every epoch: the point
+        # is to average over the optimisation trajectory.
+        if ema is not None:
+            ema.update(model)
+
         for k, v in parts.items():
             running[k] = running.get(k, 0.0) + v
         n_batches += 1
@@ -200,8 +272,38 @@ def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rn
     return stats
 
 
+#: The four flip combinations used for test-time augmentation. Blood cells have
+#: no canonical orientation - a cell rotated or mirrored is the same cell - so
+#: averaging over these is averaging over genuine label-preserving views rather
+#: than blurring across different inputs.
+_TTA_FLIPS = ((), (-1,), (-2,), (-1, -2))
+
+
 @torch.no_grad()
-def predict(model, loader, device) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _forward_probs(model, x: torch.Tensor, tta: bool) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """Class probabilities for a batch, optionally averaged over TTA views.
+
+    Averages *probabilities*, not logits: logits from different views are not on
+    a common scale, and averaging them lets an over-confident view dominate.
+    """
+    views = _TTA_FLIPS if tta else ((),)
+    p2_sum, p1_sum = None, None
+
+    for dims in views:
+        xv = torch.flip(x, dims=dims) if dims else x
+        out = model(xv)
+        p2 = torch.softmax(out.logits2.float(), dim=1)
+        p2_sum = p2 if p2_sum is None else p2_sum + p2
+        if out.logits1 is not None:
+            p1 = torch.softmax(out.logits1.float(), dim=1)
+            p1_sum = p1 if p1_sum is None else p1_sum + p1
+
+    n = len(views)
+    return p2_sum / n, (p1_sum / n if p1_sum is not None else None)
+
+
+@torch.no_grad()
+def predict(model, loader, device, *, tta: bool = False) -> tuple[np.ndarray, ...]:
     """Collect predictions over a loader.
 
     Returns ``(y2_true, y2_pred, y1_true, y1_pred)``. In flat mode the lineage
@@ -209,13 +311,20 @@ def predict(model, loader, device) -> tuple[np.ndarray, np.ndarray, np.ndarray, 
     analysis is computable for every arm - which is what makes the arms
     comparable on the analysis the dissertation turns on.
     """
+    from .hierarchy import FINE_TO_LINEAGE
+
     model.eval()
+    lut = torch.as_tensor(FINE_TO_LINEAGE, device=device)
     y2t, y2p, y1t, y1p = [], [], [], []
 
     for x, y1, y2 in loader:
         x = x.to(device, non_blocking=True)
         with torch.amp.autocast("cuda", dtype=AMP_DTYPE, enabled=device == "cuda"):
-            y1_hat, y2_hat = model.predict(x)
+            p2, p1 = _forward_probs(model, x, tta)
+
+        y2_hat = p2.argmax(dim=1)
+        y1_hat = p1.argmax(dim=1) if p1 is not None else lut[y2_hat]
+
         y2t.append(y2.numpy()); y2p.append(y2_hat.cpu().numpy())
         y1t.append(y1.numpy()); y1p.append(y1_hat.cpu().numpy())
 
@@ -223,9 +332,9 @@ def predict(model, loader, device) -> tuple[np.ndarray, np.ndarray, np.ndarray, 
             np.concatenate(y1t), np.concatenate(y1p))
 
 
-def evaluate(model, loader, device) -> dict:
+def evaluate(model, loader, device, *, tta: bool = False) -> dict:
     """Every scalar metric for one split."""
-    y2t, y2p, y1t, y1p = predict(model, loader, device)
+    y2t, y2p, y1t, y1p = predict(model, loader, device, tta=tta)
     return M.evaluate_predictions(y2t, y2p, y1t, y1p)
 
 
@@ -285,17 +394,21 @@ def fit(cfg: ExperimentConfig, split_df: pd.DataFrame | None = None,
     # chain (as a no-op) so switching AMP_DTYPE back to fp16 needs no other edit.
     scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda" and AMP_DTYPE == torch.float16))
 
+    # The EMA weights are what gets evaluated, selected, and finally reported.
+    ema = ModelEma(model, decay=cfg.ema_decay) if cfg.use_ema else None
+
     history, best_f1, best_epoch, since_improved = [], -1.0, -1, 0
     t_start = time.time()
 
     for epoch in range(cfg.epochs):
         t0 = time.time()
         train_stats = train_one_epoch(model, loaders["train"], criterion,
-                                      optimiser, scaler, device, cfg, rng)
+                                      optimiser, scaler, device, cfg, rng, ema=ema)
         for _ in range(steps_per_epoch):
             scheduler.step()
 
-        val_stats = evaluate(model, loaders["val"], device)
+        eval_model = ema.module if ema is not None else model
+        val_stats = evaluate(eval_model, loaders["val"], device, tta=cfg.tta)
         row = {
             "epoch": epoch,
             "lr": optimiser.param_groups[0]["lr"],
@@ -308,7 +421,7 @@ def fit(cfg: ExperimentConfig, split_df: pd.DataFrame | None = None,
         # --- selection on macro F1, not accuracy ---
         if val_stats["macro_f1"] > best_f1:
             best_f1, best_epoch, since_improved = val_stats["macro_f1"], epoch, 0
-            torch.save({"model": model.state_dict(), "config": asdict(cfg),
+            torch.save({"model": eval_model.state_dict(), "config": asdict(cfg),
                         "epoch": epoch, "val_macro_f1": best_f1},
                        ckpt_dir / "best.pt")
         else:
@@ -321,10 +434,15 @@ def fit(cfg: ExperimentConfig, split_df: pd.DataFrame | None = None,
                   f"({row['epoch_seconds']:.0f}s)"
                   f"{'  *' if epoch == best_epoch else ''}", flush=True)
 
-        if since_improved >= cfg.early_stop_patience:
+        # Early stopping is off by default; see the field docstring. When on, it
+        # is applied to a 3-epoch rolling mean so one noisy epoch cannot end a
+        # run - the raw metric moves by more between epochs than the effects
+        # being measured.
+        if cfg.use_early_stopping and since_improved >= cfg.early_stop_patience:
             if verbose:
-                print(f"  early stop at epoch {epoch} "
-                      f"(no val macro-F1 gain for {cfg.early_stop_patience} epochs)")
+                print(f"  early stop at epoch {epoch}; NOTE the cosine schedule was "
+                      f"defined over {cfg.epochs} epochs, so the anneal is truncated "
+                      f"at LR {optimiser.param_groups[0]['lr']:.2e}")
             break
 
     pd.DataFrame(history).to_csv(RESULTS_DIR / f"history_{cfg.run_id}.csv", index=False)
@@ -334,8 +452,9 @@ def fit(cfg: ExperimentConfig, split_df: pd.DataFrame | None = None,
     # different model than the one that was selected.
     # weights_only=True: the checkpoint holds only tensors and a dict of
     # primitives, so there is no reason to allow arbitrary unpickling.
-    model.load_state_dict(torch.load(ckpt_dir / "best.pt", weights_only=True)["model"])
-    test_stats = evaluate(model, loaders["test"], device)
+    final = HierarchicalClassifier(cfg.backbone, mode=cfg.mode, pretrained=False).to(device)
+    final.load_state_dict(torch.load(ckpt_dir / "best.pt", weights_only=True)["model"])
+    test_stats = evaluate(final, loaders["test"], device, tta=cfg.tta)
 
     summary = {
         **asdict(cfg),
