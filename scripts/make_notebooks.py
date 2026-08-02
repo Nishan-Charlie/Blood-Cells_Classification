@@ -517,9 +517,20 @@ preds = {}
 for arm in ARMS_TO_EVAL:
     model, row = load_arm(arm)
     dl = test_loader(stain_norm=bool(row["stain_norm"]))
-    preds[arm] = engine.predict(model, dl, DEVICE)
+    # tta must match what the run recorded, or the numbers here will not
+    # reconcile with results/summary.csv.
+    preds[arm] = engine.predict(model, dl, DEVICE, tta=bool(row.get("tta", False)))
     del model; torch.cuda.empty_cache()
-    print(f"  {arm:16s} done")"""),
+    print(f"  {arm:16s} done  (tta={bool(row.get('tta', False))})")"""),
+
+    ("code", """# Reconciliation check: recomputed metrics must match the recorded run.
+# A mismatch means the notebook and the results table describe different models.
+for arm in ARMS_TO_EVAL:
+    y2t, y2p, _, _ = preds[arm]
+    here = metrics.classification_metrics(y2t, y2p)["macro_f1"]
+    there = float(runs[(runs.arm == arm) & (runs.seed == 0)].iloc[0]["test_macro_f1"])
+    flag = "OK" if abs(here - there) < 1e-6 else "MISMATCH"
+    print(f"  {arm:16s} notebook {here:.4f}  summary.csv {there:.4f}  [{flag}]")"""),
 
     ("md", """## 1. Confusion matrices
 
