@@ -225,6 +225,81 @@ p-values so the reader is not asked to lean on the p-value alone.
    resolved to 224 for every backbone; this was already flagged in CLAUDE.md and remains
    uncorrected in the `.tex`.
 
+## Implementation findings
+
+Four non-obvious things surfaced during implementation. Each was a silent
+failure - code that ran and produced plausible output while being wrong - so
+each is recorded here and commented at the site in the code.
+
+### 1. Mixed precision must be bf16, not fp16
+
+An fp16 screening run reached validation macro-F1 0.80 at epoch 2 and then went
+**NaN at epoch 3**, staying NaN for the rest of the run. NaN weights never
+recover, so the remaining epochs were wasted; only the checkpoint-on-best-F1
+policy preserved a usable model at all.
+
+Switched to **bfloat16**, which keeps float32's exponent range and so cannot
+overflow or underflow the way fp16 does. The RTX 4070 is Ada (compute 8.9) with
+native bf16 support. `GradScaler` is disabled under bf16 - it exists to stop fp16
+gradient underflow, which bf16 does not suffer.
+
+Two supporting changes: the loss is computed in float32 regardless of autocast
+dtype (the class-balanced weights span a 175x range and the focal term
+exponentiates a log-probability), and a non-finite loss now skips the optimiser
+step rather than poisoning the weights.
+
+Related: the consistency term's `clamp_min(1e-8)` is a **no-op under fp16** -
+float16's smallest subnormal is ~6e-8, so 1e-8 rounds to exactly zero. Guard
+constants must be checked against the dtype they will actually run in.
+
+### 2. `backbone.num_features` is not the head input width
+
+For `mobilenetv3_large_100`, timm reports `num_features = 960` - the width before
+`conv_head` - while the actual pooled output with `num_classes=0` is **1280**,
+because MobileNetV3 expands through conv_head before its classifier. Building
+heads from the attribute fails at the first forward pass with a shape mismatch.
+
+`models.py` measures the width with one dummy forward pass at construction
+instead, which is correct for every architecture.
+
+### 3. Grad-CAM on ViT must not hook the final block
+
+timm's ViT pools with `global_pool='token'`: the classifier reads **only the
+class token**. At the final block the 196 patch tokens no longer influence the
+output, so their gradient is *exactly zero* - and Grad-CAM needs the patch
+tokens, since the class token has no spatial position.
+
+Hooking `blocks[-1]` therefore produces an all-zero map, which min-max
+normalisation renders as a flat image that still looks like a legitimate figure.
+Measured gradient magnitude: **0.0 at `blocks[-1]`, 6.6e-2 at
+`blocks[-1].norm1`**. The latter is the input to the final block's attention,
+where patch tokens still route into the class token, and is what `gradcam.py`
+hooks.
+
+Separately, `register_full_backward_hook` never fires on a timm ViT `Block`. The
+gradient is captured with a tensor hook on the activation instead, which behaves
+identically across CNNs and ViTs. Grad-CAM now raises if it captured no
+gradient rather than returning a blank map.
+
+### 4. Memmaps must not cross a Windows process boundary
+
+Windows DataLoader workers are spawned, not forked, so the Dataset is pickled
+into each one - and pickling an open `np.memmap` serialises all 10 GB per
+worker. `MLL23Dataset` holds the cache **path** and maps it lazily inside each
+worker, with `__getstate__` dropping any open mapping before pickling.
+
+### Measured throughput
+
+| Configuration | Throughput |
+|---|---:|
+| TIFF decode, `num_workers=4` | 178 img/s |
+| TIFF decode, `num_workers=8` | 119 img/s (worker contention) |
+| Full ResNet-50 training step, no cache | 82 img/s, 5.95 min/epoch |
+| Cached, warm page cache | ~850 img/s |
+
+Cache build took 13.9 min for both caches (3.7 min raw, 10.2 min Reinhard),
+against a 40 min estimate.
+
 ## Risks
 
 - **3 seeds is a thin basis for a t-test.** Mitigated by reporting effect sizes and per-seed

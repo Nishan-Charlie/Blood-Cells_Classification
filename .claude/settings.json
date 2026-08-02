@@ -10,7 +10,20 @@
       "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -u \"C:/Users/nisha/AppData/Local/Temp/claude/c--Users-nisha-Desktop-Freelance-Research/ae884425-3e2e-4c95-afd4-1d32abe4c9b8/scratchpad/bench.py\")",
       "Bash(powershell -c 'Get-PSDrive C,D | Select Name,@{n='\\\\''UsedGB'\\\\'';e={[math]::Round\\($_.Used/1GB,1\\)}},@{n='\\\\''FreeGB'\\\\'';e={[math]::Round\\($_.Free/1GB,1\\)}}')",
       "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -u scripts/build_caches.py)",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -u \"C:/Users/nisha/AppData/Local/Temp/claude/c--Users-nisha-Desktop-Freelance-Research/ae884425-3e2e-4c95-afd4-1d32abe4c9b8/scratchpad/smoke.py\")",
+      "Bash(grep -viE \"^\\\\s*$|UserWarning|warnings.warn|FutureWarning\")",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -u -m src.experiments --phase smoke)",
+      "Bash(grep -viE \"UserWarning|warnings.warn|FutureWarning|^\\\\s*$\")",
+      "Bash(powershell -c '$m = Get-CimInstance Win32_OperatingSystem; '\\\\''TotalRAM_GB {0:N1}'\\\\'' -f \\($m.TotalVisibleMemorySize/1MB\\); '\\\\''FreeRAM_GB  {0:N1}'\\\\'' -f \\($m.FreePhysicalMemory/1MB\\)')",
+      "Bash(echo \"cleared \\(exit $?\\)\")",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -u -m src.experiments --phase screen --epochs 6)",
+      "Bash(C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe -u -c ' *)",
+      "Bash(grep -viE \"UserWarning|warnings.warn|FutureWarning|symlink|Developer Mode|^\\\\s*$\")",
+      "Bash(rm -rf results checkpoints)",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" -c \"import nbformat; print\\('nbformat', nbformat.__version__\\)\")",
+      "Bash(\"C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe\" scripts/make_notebooks.py)",
+      "Bash(PYTHONIOENCODING=utf-8 C:/Users/nisha/miniconda3/envs/mri-diffuser/python.exe -c ' *)"
     ]
   }
 }

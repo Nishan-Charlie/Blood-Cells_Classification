@@ -37,6 +37,17 @@ CHECKPOINT_DIR = config.PROJECT_ROOT / "checkpoints"
 #: 8 from contention (178 -> 119 img/s). More is not better here.
 NUM_WORKERS = 4
 
+#: bfloat16, not float16. An fp16 screening run diverged to NaN at epoch 3 after
+#: reaching val macro-F1 0.80 - the classic reduced-precision blow-up, and one
+#: that wastes the rest of the run because NaN weights never recover. bf16 keeps
+#: float32's exponent range, so the overflow/underflow that causes this cannot
+#: arise, at the cost of mantissa precision that training does not need. The
+#: RTX 4070 is Ada (compute 8.9) and supports bf16 natively.
+#:
+#: GradScaler exists to stop fp16 gradients underflowing, which bf16 does not do,
+#: so it is disabled - see the scaler construction in fit().
+AMP_DTYPE = torch.bfloat16
+
 
 @dataclass(frozen=True)
 class ExperimentConfig:
@@ -106,11 +117,16 @@ def build_loaders(cfg: ExperimentConfig, split_df: pd.DataFrame) -> dict[str, Da
 
         # Smoke-test path: subsample the training split but keep it stratified,
         # so every class - including the 23-image rare one - stays represented.
+        # Built with an explicit loop rather than groupby().apply(): the latter
+        # is deprecated for this use, and the max(1, ...) floor is what keeps a
+        # rare class from rounding away to zero samples entirely.
         if split == "train" and cfg.limit_train is not None:
             frac = min(1.0, cfg.limit_train / len(sub))
-            sub = sub.groupby("y2", group_keys=False).apply(
-                lambda g: g.sample(max(1, int(len(g) * frac)), random_state=cfg.seed)
-            )
+            parts = [
+                g.sample(min(max(1, round(len(g) * frac)), len(g)), random_state=cfg.seed)
+                for _, g in sub.groupby("y2")
+            ]
+            sub = pd.concat(parts)  # concat preserves the index, i.e. the cache rows
 
         is_train = split == "train"
         ds = MLL23Dataset(sub, train=is_train, cache_path=cache_path)
@@ -131,6 +147,7 @@ def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rn
     model.train()
     running: dict[str, float] = {}
     n_batches = 0
+    n_skipped = 0
 
     for x, y1, y2 in loader:
         x = x.to(device, non_blocking=True)
@@ -142,7 +159,7 @@ def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rn
         mixed = mixing.maybe_mix(x, y1, y2, kind=cfg.mix_kind, p=cfg.mix_prob,
                                  alpha=cfg.mix_alpha, rng=rng)
 
-        with torch.amp.autocast("cuda", dtype=torch.float16, enabled=device == "cuda"):
+        with torch.amp.autocast("cuda", dtype=AMP_DTYPE, enabled=device == "cuda"):
             out = model(mixed.images)
             if mixed.lam >= 1.0:
                 loss, parts = criterion(out, mixed.y1_a, mixed.y2_a)
@@ -155,6 +172,15 @@ def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rn
                 parts = {k: mixed.lam * parts_a[k] + (1 - mixed.lam) * parts_b.get(k, 0.0)
                          for k in parts_a}
 
+        # Skip a non-finite batch rather than stepping on it. One NaN loss
+        # applied to the weights makes every subsequent epoch NaN, silently
+        # wasting the rest of the run - which is exactly what an earlier fp16
+        # screening run did. Cheap insurance even now that bf16 makes it unlikely.
+        if not torch.isfinite(loss):
+            n_skipped += 1
+            optimiser.zero_grad(set_to_none=True)
+            continue
+
         optimiser.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(optimiser)
@@ -166,7 +192,12 @@ def train_one_epoch(model, loader, criterion, optimiser, scaler, device, cfg, rn
             running[k] = running.get(k, 0.0) + v
         n_batches += 1
 
-    return {f"train_{k}": v / max(n_batches, 1) for k, v in running.items()}
+    if n_skipped:
+        print(f"    [warn] skipped {n_skipped} non-finite batches this epoch")
+
+    stats = {f"train_{k}": v / max(n_batches, 1) for k, v in running.items()}
+    stats["train_skipped_batches"] = n_skipped
+    return stats
 
 
 @torch.no_grad()
@@ -183,7 +214,7 @@ def predict(model, loader, device) -> tuple[np.ndarray, np.ndarray, np.ndarray, 
 
     for x, y1, y2 in loader:
         x = x.to(device, non_blocking=True)
-        with torch.amp.autocast("cuda", dtype=torch.float16, enabled=device == "cuda"):
+        with torch.amp.autocast("cuda", dtype=AMP_DTYPE, enabled=device == "cuda"):
             y1_hat, y2_hat = model.predict(x)
         y2t.append(y2.numpy()); y2p.append(y2_hat.cpu().numpy())
         y1t.append(y1.numpy()); y1p.append(y1_hat.cpu().numpy())
@@ -249,7 +280,10 @@ def fit(cfg: ExperimentConfig, split_df: pd.DataFrame | None = None,
         return 0.5 * (1.0 + np.cos(np.pi * min(progress, 1.0)))
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, lr_lambda)
-    scaler = torch.amp.GradScaler("cuda", enabled=device == "cuda")
+    # Disabled under bf16: GradScaler exists to keep fp16 gradients from
+    # underflowing, and bf16 has float32's exponent range. Kept in the call
+    # chain (as a no-op) so switching AMP_DTYPE back to fp16 needs no other edit.
+    scaler = torch.amp.GradScaler("cuda", enabled=(device == "cuda" and AMP_DTYPE == torch.float16))
 
     history, best_f1, best_epoch, since_improved = [], -1.0, -1, 0
     t_start = time.time()

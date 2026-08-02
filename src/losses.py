@@ -90,6 +90,11 @@ class FocalLoss(nn.Module):
         self.register_buffer("weight", weight)
 
     def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # float32 regardless of autocast: the class-balanced weights span a 175x
+        # range, and the focal modulator exponentiates a log-probability. Both
+        # are numerically delicate in reduced precision, and a single non-finite
+        # loss propagates NaN into the weights for the rest of the run.
+        logits = logits.float()
         ce = F.cross_entropy(
             logits, target,
             weight=self.weight,
@@ -181,7 +186,9 @@ class HierarchicalLoss(nn.Module):
             # Lineage counts are the sum of their members' counts. The lineage
             # level is imbalanced too (myeloid is ~63% of the corpus), so it gets
             # the same treatment rather than being left unweighted.
-            w_lin = torch.zeros(NUM_LINEAGES)
+            # Built on class_counts' device: the caller may already have moved
+            # the counts to the GPU, and a CPU accumulator would fail the add.
+            w_lin = torch.zeros(NUM_LINEAGES, device=class_counts.device)
             for fine_idx, lineage_idx in enumerate(FINE_TO_LINEAGE):
                 w_lin[lineage_idx] += class_counts[fine_idx]
             w_lin = class_balanced_weights(w_lin, beta=beta)
@@ -203,8 +210,14 @@ class HierarchicalLoss(nn.Module):
         The fine posterior is marginalised into lineage space and used as the
         *target*; gradients flow into both heads, pulling them toward agreement
         rather than forcing one to chase the other.
+
+        Computed in float32 regardless of the surrounding autocast dtype. The
+        guard value below is 1e-8, which is *zero* in float16 (whose smallest
+        subnormal is ~6e-8), so under fp16 autocast the clamp silently does
+        nothing at all.
         """
-        p_fine_as_lineage = F.softmax(logits2, dim=1) @ self.f2l
+        logits1, logits2 = logits1.float(), logits2.float()
+        p_fine_as_lineage = F.softmax(logits2, dim=1) @ self.f2l.float()
         log_q = F.log_softmax(logits1, dim=1)
         # clamp: a marginalised probability can reach exactly 0 for a lineage
         # whose classes all have vanishing posterior, and log(0) would poison

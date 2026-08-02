@@ -41,6 +41,7 @@ import timm
 import torch
 import torch.nn as nn
 
+from . import config
 from .hierarchy import NUM_FINE_CLASSES, NUM_LINEAGES
 
 #: timm names for the four backbones the proposal compares. Keys are the short
@@ -98,7 +99,7 @@ class HierarchicalClassifier(nn.Module):
         self.backbone = timm.create_model(
             self.backbone_name, pretrained=pretrained, num_classes=0
         )
-        feat_dim = self.backbone.num_features
+        feat_dim = self._infer_feature_dim()
 
         self.dropout = nn.Dropout(dropout)
         self.head_fine = nn.Linear(feat_dim, NUM_FINE_CLASSES)
@@ -106,6 +107,27 @@ class HierarchicalClassifier(nn.Module):
         # appear in the parameter count and in weight decay, quietly making the
         # "identical backbone" comparison less identical than it claims.
         self.head_lineage = nn.Linear(feat_dim, NUM_LINEAGES) if mode == "hier" else None
+
+    def _infer_feature_dim(self) -> int:
+        """Measure the backbone's pooled output width with one dummy forward.
+
+        ``backbone.num_features`` is *not* reliable for this. For
+        ``mobilenetv3_large_100`` it reports 960 - the width before the
+        ``conv_head`` - while the actual pooled output with ``num_classes=0`` is
+        1280, because MobileNetV3 expands through conv_head before its
+        classifier. Trusting the attribute builds heads of the wrong width and
+        fails at the first forward pass with a shape mismatch.
+
+        Probing sidesteps every such architecture-specific quirk, at the cost of
+        one forward pass at construction time.
+        """
+        was_training = self.backbone.training
+        self.backbone.eval()
+        with torch.no_grad():
+            dummy = torch.zeros(1, 3, config.IMAGE_SIZE, config.IMAGE_SIZE)
+            dim = int(self.backbone(dummy).shape[-1])
+        self.backbone.train(was_training)
+        return dim
 
     def forward(self, x: torch.Tensor) -> ModelOutput:
         feats = self.dropout(self.backbone(x))

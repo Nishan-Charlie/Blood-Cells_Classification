@@ -22,16 +22,32 @@ src/
   manifest.py    build/verify the image manifest
   splits.py      deterministic stratified 70/15/15
   transforms.py  288->224 pipeline, class-conditional aug, RandAugment policies
+  cache.py       uint8 memmap of decoded 288px images (raw + Reinhard variants)
   dataset.py     MLL23Dataset yielding (image, y1, y2)
   mixing.py      hierarchical MixUp/CutMix (one lambda across both label levels)
   stain.py       Macenko + Reinhard stain normalisation (fit on train only)
   features.py    frozen-backbone embedding extraction for EDA
   quality.py     per-image quality stats, near-duplicate detection, hierarchy tests
+  models.py      HierarchicalClassifier: shared backbone -> lineage + fine heads
+  losses.py      class-balanced weights, focal loss, HierarchicalLoss  <- ablations live here
+  metrics.py     macro/balanced metrics + within- vs cross-lineage error split
+  engine.py      ExperimentConfig and the single training loop
+  experiments.py the arms declared as data; CLI entry point
+  stats.py       paired t-tests across seeds, Cohen's d
+  gradcam.py     saliency over the final backbone stage (ViT-aware)
   viz.py         figures for the write-up
+scripts/
+  build_caches.py    one-time cache build; idempotent
+  make_notebooks.py  regenerates notebooks 03-05 from source
 notebooks/
   01_data_preparation.ipynb   acquire, verify, split; idempotent
   02_dataset_analysis.ipynb   hierarchy tests, stain norm, duplicate screen, aug demo
+  03_model_and_training.ipynb architecture, loss checks, overfitting test
+  04_experiments.ipynb        backbone screen + the five arms + significance
+  05_evaluation.ipynb         confusion matrices, per-class, Grad-CAM
 artifacts/       generated figures
+results/         summary.csv (one row per run) + history_*.csv (per epoch)
+checkpoints/     best.pt per run, selected on val macro F1
 ```
 
 `hierarchy.py` is the keystone — it declares the class indices, their lineage mapping, and the published per-class counts used to verify the download. Its module-level `_validate()` runs at import and fails loudly if the invariants break.
@@ -53,6 +69,44 @@ pdflatex -interaction=nonstopmode -halt-on-error Literature_Review.tex
 ```
 
 There is no test suite yet. Correctness is currently enforced by assertions at import time (`hierarchy._validate`), count verification against published figures (`manifest.verify_manifest`), and split validation (`splits.check_split`) — keep adding to these rather than trusting a pipeline that merely runs.
+
+## Training
+
+```bash
+# One-time: build the decoded-image caches (~14 min, ~21 GB on D:). Idempotent.
+python scripts/build_caches.py
+
+# Phase 1: backbone screen (4 backbones, 6 epochs) -> pick a backbone.
+python -m src.experiments --phase screen --epochs 6
+
+# Phase 2: the five required experiments, 4 distinct configs x 3 seeds.
+python -m src.experiments --phase main --backbone <winner> --epochs 20
+
+# Prove every code path runs, in a couple of minutes.
+python -m src.experiments --phase smoke
+```
+
+Both phases are **resumable**: `run_matrix` skips any run already in
+`results/summary.csv`, so re-running after an interruption costs only the
+unfinished runs.
+
+Four things that will bite if forgotten (all commented at their site in the code,
+and detailed in `docs/superpowers/specs/2026-08-01-modelling-pipeline-design.md`):
+
+- **Mixed precision is bf16, not fp16.** An fp16 run reached val macro-F1 0.80
+  then went NaN at epoch 3 and never recovered. Do not "optimise" it back.
+- **`backbone.num_features` is wrong for MobileNetV3** (960 vs the real 1280).
+  `models.py` measures the width with a dummy forward instead.
+- **Grad-CAM on ViT must hook `blocks[-1].norm1`, not `blocks[-1]`.** timm's ViT
+  pools the class token only, so patch-token gradients at the last block are
+  exactly zero — producing a flat map that still looks like a real figure.
+- **Never hand an open `np.memmap` to a DataLoader worker.** Windows spawns
+  workers, so the memmap would be pickled in full (10 GB per worker). Pass the
+  path; `MLL23Dataset` maps it lazily per process.
+
+Data-loading is the bottleneck without the cache: 178 img/s decoding TIFFs
+(and *slower* at `num_workers=8` — 119 img/s — from contention) versus ~850 img/s
+cached. `NUM_WORKERS = 4` is measured, not guessed.
 
 ## LaTeX build
 

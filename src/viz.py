@@ -283,6 +283,234 @@ def quality_distributions(stats: pd.DataFrame, metrics=("brightness", "contrast"
     return fig
 
 
+# --------------------------------------------------------------------------- #
+# Modelling figures (notebooks 03-05)
+# --------------------------------------------------------------------------- #
+def training_curves(history: pd.DataFrame, *, title: str | None = None):
+    """Loss components and validation metrics over epochs.
+
+    Three panels. The left one separates the loss into its fine, lineage, and
+    consistency terms: if the hierarchy is doing anything, the lineage and
+    consistency curves must actually move, and a flat consistency curve is
+    evidence the term is inert rather than helping.
+
+    The right panel plots validation macro F1 and accuracy together. The gap
+    between them *is* the imbalance story - accuracy running far ahead of macro
+    F1 means the model is riding the head classes.
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
+    ep = history["epoch"]
+
+    # --- loss components ---
+    parts = [("train_fine", "fine", "#2a78d6"),
+             ("train_lineage", "lineage", "#008300"),
+             ("train_consistency", "consistency", "#e87ba4")]
+    for col, label, colour in parts:
+        if col in history.columns:
+            axes[0].plot(ep, history[col], label=label, color=colour, lw=2)
+    axes[0].set_title("Training loss components", pad=10)
+    axes[0].set_xlabel("Epoch"); axes[0].set_ylabel("Loss")
+    axes[0].legend(fontsize=8, labelcolor=INK_SECONDARY)
+
+    # --- selection metric vs accuracy ---
+    axes[1].plot(ep, history["val_macro_f1"], label="macro F1", color="#2a78d6", lw=2)
+    axes[1].plot(ep, history["val_accuracy"], label="accuracy", color=INK_MUTED, lw=1.6, ls="--")
+    if "val_balanced_accuracy" in history.columns:
+        axes[1].plot(ep, history["val_balanced_accuracy"], label="balanced acc",
+                     color="#008300", lw=1.6)
+    best = int(history["val_macro_f1"].idxmax())
+    axes[1].axvline(history.loc[best, "epoch"], color=BASELINE, lw=1, zorder=0)
+    axes[1].annotate(f"selected\nep {int(history.loc[best, 'epoch'])}",
+                     (history.loc[best, "epoch"], history["val_macro_f1"].max()),
+                     textcoords="offset points", xytext=(6, -18),
+                     fontsize=8, color=INK_SECONDARY)
+    axes[1].set_title("Validation metrics (selection on macro F1)", pad=10)
+    axes[1].set_xlabel("Epoch")
+    axes[1].legend(fontsize=8, labelcolor=INK_SECONDARY)
+
+    # --- hierarchical error split ---
+    if "val_cross_lineage_error" in history.columns:
+        axes[2].plot(ep, history["val_within_lineage_error"], label="within-lineage",
+                     color="#008300", lw=2)
+        axes[2].plot(ep, history["val_cross_lineage_error"], label="cross-lineage",
+                     color="#e87ba4", lw=2)
+        axes[2].set_title("Error type over training", pad=10)
+        axes[2].set_xlabel("Epoch"); axes[2].set_ylabel("Share of all samples")
+        axes[2].legend(fontsize=8, labelcolor=INK_SECONDARY)
+    else:
+        axes[2].axis("off")
+
+    if title:
+        fig.suptitle(title, fontsize=12, y=1.03)
+    fig.tight_layout()
+    return fig
+
+
+def confusion_heatmap(cm: pd.DataFrame, *, title: str | None = None, annotate: bool = False):
+    """Row-normalised confusion matrix with lineage blocks marked.
+
+    Class order is the maturation continuum, never alphabetical, so adjacent
+    maturation stages sit adjacent to the diagonal and the clinically expected
+    confusions appear as near-diagonal mass rather than scattered noise. White
+    rules mark the lineage boundaries: anything outside those blocks is a severe
+    cross-lineage error.
+    """
+    from matplotlib.colors import LinearSegmentedColormap
+
+    cmap = LinearSegmentedColormap.from_list("seq_blue", ("#ffffff",) + SEQUENTIAL_BLUE)
+    fig, ax = plt.subplots(figsize=(11, 9.5))
+    im = ax.imshow(cm.to_numpy(), cmap=cmap, vmin=0, vmax=1, aspect="equal")
+
+    names = list(cm.index)
+    ax.set_xticks(range(len(names)), names, rotation=90, fontsize=7.5, color=INK_SECONDARY)
+    ax.set_yticks(range(len(names)), names, fontsize=7.5, color=INK_SECONDARY)
+    ax.set_xlabel("Predicted"); ax.set_ylabel("True")
+    ax.grid(False)
+
+    lut = [c.lineage for c in CLASSES]
+    for i in range(len(lut) - 1):
+        if lut[i] != lut[i + 1]:
+            ax.axhline(i + 0.5, color=SURFACE, lw=2.5)
+            ax.axvline(i + 0.5, color=SURFACE, lw=2.5)
+
+    if annotate:
+        vals = cm.to_numpy()
+        for i in range(len(names)):
+            for j in range(len(names)):
+                if vals[i, j] >= 0.01:
+                    ax.text(j, i, f"{vals[i, j]:.2f}".lstrip("0"), ha="center", va="center",
+                            fontsize=6, color=SURFACE if vals[i, j] > 0.55 else INK_SECONDARY)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Share of true class (recall)", color=INK_SECONDARY, fontsize=9)
+    ax.set_title(title or "Confusion matrix, row-normalised", pad=12)
+    fig.tight_layout()
+    return fig
+
+
+def arm_comparison(summary: pd.DataFrame, *, metric: str = "test_macro_f1",
+                   title: str | None = None):
+    """Per-arm mean +/- std of one metric, as a labelled bar chart.
+
+    Error bars are the standard deviation across seeds. Direct value labels are
+    always drawn, so magnitude never depends on reading a bar against an axis.
+    """
+    mean_col, std_col = f"{metric}_mean", f"{metric}_std"
+    df = summary.sort_values(mean_col)
+
+    fig, ax = plt.subplots(figsize=(8.6, 0.62 * len(df) + 2.2))
+    ypos = np.arange(len(df))
+    ax.barh(ypos, df[mean_col], height=_BAR_HEIGHT, color="#2a78d6", zorder=3,
+            xerr=df[std_col] if std_col in df.columns else None,
+            error_kw={"ecolor": INK_MUTED, "elinewidth": 1.2, "capsize": 3})
+
+    ax.set_yticks(ypos, df["arm"], fontsize=9)
+    ax.set_xlabel(metric.replace("_", " "))
+    ax.set_xlim(0, min(1.0, float(df[mean_col].max()) * 1.28))
+    ax.grid(axis="y", visible=False)
+    ax.set_axisbelow(True)
+
+    for y, (m, s) in enumerate(zip(df[mean_col], df.get(std_col, [0] * len(df)))):
+        ax.text(m + float(df[mean_col].max()) * 0.02 + (s or 0), y,
+                f"{m:.3f} ± {s:.3f}" if s else f"{m:.3f}",
+                va="center", fontsize=8.5, color=INK_SECONDARY)
+
+    ax.set_title(title or f"{metric.replace('_', ' ')} by experiment arm", pad=12)
+    fig.tight_layout()
+    return fig
+
+
+def error_composition(summary: pd.DataFrame, *, title: str | None = None):
+    """Stacked correct / within-lineage / cross-lineage shares per arm.
+
+    The figure that carries the hierarchical claim. A lineage-aware model should
+    shrink the cross-lineage segment specifically - shifting error toward the
+    clinically milder within-lineage kind - and that is visible here in a way no
+    scalar metric shows.
+    """
+    cols = [("test_correct_mean", "correct", "#2a78d6"),
+            ("test_within_lineage_error_mean", "within-lineage error", "#008300"),
+            ("test_cross_lineage_error_mean", "cross-lineage error", "#e87ba4")]
+    present = [(c, lab, col) for c, lab, col in cols if c in summary.columns]
+
+    fig, ax = plt.subplots(figsize=(9.2, 0.62 * len(summary) + 2.2))
+    ypos = np.arange(len(summary))
+    left = np.zeros(len(summary))
+
+    for c, label, colour in present:
+        vals = summary[c].to_numpy(dtype=float)
+        ax.barh(ypos, vals, left=left, height=_BAR_HEIGHT, color=colour, label=label,
+                zorder=3, edgecolor=SURFACE, linewidth=1.0)
+        for y, (v, l) in enumerate(zip(vals, left)):
+            if v > 0.035:  # below this the label would not fit inside the segment
+                ax.text(l + v / 2, y, f"{v:.3f}", ha="center", va="center",
+                        fontsize=7.5, color=SURFACE)
+        left += vals
+
+    ax.set_yticks(ypos, summary["arm"], fontsize=9)
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Share of test samples")
+    ax.grid(axis="y", visible=False)
+    ax.set_axisbelow(True)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.28), ncol=3,
+              fontsize=8.5, labelcolor=INK_SECONDARY)
+    ax.set_title(title or "Prediction composition by arm", pad=12)
+    fig.tight_layout()
+    return fig
+
+
+def per_class_f1_comparison(tables: dict[str, pd.DataFrame], *, title: str | None = None):
+    """Per-class F1 for several arms, ordered by class index.
+
+    Minority classes are marked, because the whole argument is about them. Where
+    arms differ most on the rare classes is the dissertation's central result.
+    """
+    fig, ax = plt.subplots(figsize=(11, 6.4))
+    names = list(next(iter(tables.values()))["class_name"])
+    ypos = np.arange(len(names))
+    palette = ["#2a78d6", "#008300", "#e87ba4", "#7b4fa8", "#c07a1e"]
+
+    n = len(tables)
+    height = _BAR_HEIGHT / n
+    for k, (arm, tbl) in enumerate(tables.items()):
+        offset = (k - (n - 1) / 2) * height
+        ax.barh(ypos + offset, tbl["f1"], height=height, zorder=3,
+                color=palette[k % len(palette)], label=arm)
+
+    minority = next(iter(tables.values()))["is_minority"].to_numpy()
+    labels = [f"{n}  *" if m else n for n, m in zip(names, minority)]
+    ax.set_yticks(ypos, labels, fontsize=8)
+    ax.invert_yaxis()
+    ax.set_xlabel("F1")
+    ax.set_xlim(0, 1)
+    ax.grid(axis="y", visible=False)
+    ax.set_axisbelow(True)
+    ax.legend(fontsize=8.5, labelcolor=INK_SECONDARY, loc="lower right")
+    ax.set_title(title or "Per-class F1 by arm  (*  = minority class)", pad=12)
+    fig.tight_layout()
+    return fig
+
+
+def gradcam_grid(panels, *, ncols: int = 4, title: str | None = None):
+    """Grid of Grad-CAM overlays.
+
+    Args:
+        panels: list of ``(overlay_rgb, caption)``.
+    """
+    n = len(panels)
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 2.5, nrows * 2.75))
+    for ax, (img, caption) in zip(np.ravel(axes), panels):
+        ax.imshow(img)
+        ax.set_title(caption, fontsize=7.5, color=INK_SECONDARY, pad=4)
+    for ax in np.ravel(axes):
+        ax.axis("off")
+    if title:
+        fig.suptitle(title, fontsize=12, y=1.0)
+    fig.tight_layout()
+    return fig
+
+
 def stain_comparison(triples, *, title: str | None = None):
     """Rows of (original, Macenko, Reinhard) for a handful of images.
 
