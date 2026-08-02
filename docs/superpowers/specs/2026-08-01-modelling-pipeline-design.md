@@ -300,6 +300,113 @@ worker, with `__getstate__` dropping any open mapping before pickling.
 Cache build took 13.9 min for both caches (3.7 min raw, 10.2 min Reinhard),
 against a 40 min estimate.
 
+## Post-hoc: why the first matrix (v1) was invalid
+
+The first complete matrix produced macro F1 ~0.85 but the arm comparison did not measure the
+methods. Four findings from the run histories, archived in `archive/v1_baseline/`.
+
+### The confound: run length determined score
+
+`corr(epochs_run, test_macro_f1) = +0.87`.
+
+| Arm | Epochs survived | Test macro F1 |
+|---|---|---:|
+| hierarchical | 37, 20, 29 | 0.853 |
+| flat_baseline | 14, 13, 35 | 0.845 |
+| stain_norm | 21, 14, 12 | 0.824 |
+| no_imbalance | 13, 12, 12 | 0.824 |
+
+The arm ranking is nearly the ranking of epoch counts. Two mechanisms produced this:
+
+1. **The cosine schedule was truncated.** It is defined over `cfg.epochs`, which was set to
+   50, but early stopping fired at 12-37. A run halting at epoch 12 stopped at **86% of peak
+   LR** - mid-training, never annealed. The 6-epoch screen runs, whose cosine completed,
+   scored *higher* on test (ViT 0.864) than any 50-epoch main run (0.853). Training longer
+   made results worse, purely through this interaction.
+2. **Early stopping fired on noise.** Validation macro-F1 moved with sd **0.021** between
+   consecutive epochs (minority F1: sd 0.038), while the effects under study were 0.008-0.028.
+   Patience-6 on that signal is close to a random stopping rule.
+
+The second point is the deeper one: **the measurement noise exceeded the effect size**, so no
+number of seeds would have made the v1 comparison conclusive.
+
+### The hierarchy was inert by the end of training
+
+Final validation lineage accuracy **98.9%**, with both auxiliary losses collapsed:
+
+```
+train_lineage     = 0.00074
+train_consistency = 0.00068
+```
+
+Lineage is the *easy* axis. The hard problem is discrimination *within* a lineage - myeloid
+maturation stages, and the rare lymphoid types. A lineage-aware auxiliary task therefore
+regularises an axis the model has already solved, which explains why the hierarchical arm did
+not improve minority-class F1. This is a design insight, not just a tuning issue: if the
+hierarchy is to help the tail, the auxiliary signal must target a distinction that is still
+unresolved late in training.
+
+### Two regularisers were implemented but never active
+
+Every v1 run used `mix_kind="none"` and `aug_policy="basic"` while training loss fell to
+**0.005** against a validation plateau of 0.84 - plain memorisation.
+
+Worse, `aug_policy` was a **dead config field**: `build_loaders` never passed it to
+`MLL23Dataset`, so every run trained on the basic policy regardless of what its config
+recorded. The `aug_policy` column in v1's `summary.csv` is fiction. Fixed; the parameter is
+now threaded through.
+
+## v2 protocol changes
+
+| Change | Rationale |
+|---|---|
+| Early stopping **off**, fixed 30-epoch budget | Cosine always completes; identical anneal for every arm |
+| **Weight EMA** (decay 0.999), evaluated instead of live weights | Halves selection-metric noise |
+| **TTA** over four flip views | Cells have no canonical orientation; flips are label-preserving |
+| **RandAugment + CutMix** enabled | Counters the observed memorisation |
+| `aug_policy` threaded to the dataset | It previously did nothing |
+
+Validated on one config before committing to the full matrix (hierarchical / ViT / seed 0,
+identical data and seed):
+
+| Metric | v1 | v2 | Δ |
+|---|---:|---:|---:|
+| test macro F1 | 0.8695 | 0.8809 | +0.0114 |
+| test balanced accuracy | 0.8797 | 0.8929 | +0.0132 |
+| test minority macro F1 | 0.8201 | 0.8370 | +0.0169 |
+| cross-lineage error | 0.0133 | 0.0119 | −0.0014 |
+| within-lineage error | 0.0413 | 0.0307 | −0.0106 |
+| **val macro-F1 epoch-to-epoch sd** | **0.0211** | **0.0097** | **−54%** |
+
+Cost: ~101 s/epoch versus v1's ~60 s, from RandAugment on the CPU dataloader. Roughly 10 h
+for 12 runs rather than the 6-8 h originally estimated.
+
+## Not implemented: further improvements, in priority order
+
+These follow from the v1 diagnosis and are the natural next steps if v2 still leaves the
+minority-class claim unsupported.
+
+**Make the hierarchy target an axis that is still hard.** The lineage head saturates at 98.9%,
+so it stops contributing gradient long before training ends. Two options:
+
+* **Conditional inference** - factor the prediction as `p(y2|x) = p(y1|x) · p(y2|y1,x)` so the
+  coarse decision genuinely constrains the fine one, rather than two heads coexisting on a
+  shared trunk and being nudged toward agreement.
+* **Retarget the auxiliary task** at maturation stage within the myeloid branch, which is
+  where the residual confusion actually lives, instead of at lineage.
+
+**Attack the tail directly.** Class-balanced weights plus focal loss is a relatively weak
+long-tail treatment. Stronger, well-established alternatives:
+
+* **Decoupled training (cRT)** - learn the representation with instance-balanced sampling,
+  then retrain *only* the classifier with class-balanced sampling. Consistently among the
+  strongest long-tail methods and a much larger lever than reweighting alone.
+* **Logit adjustment** or **LDAM margin loss** - enforce larger margins for rare classes.
+
+**Raise statistical power.** Three seeds gives 2 degrees of freedom. Five seeds, combined with
+the halved measurement noise from EMA, would make the paired tests meaningfully informative
+rather than merely indicative.
+
 ## Risks
 
 - **3 seeds is a thin basis for a t-test.** Mitigated by reporting effect sizes and per-seed
