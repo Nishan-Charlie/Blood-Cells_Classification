@@ -452,9 +452,12 @@ def fit(cfg: ExperimentConfig, split_df: pd.DataFrame | None = None,
     # different model than the one that was selected.
     # weights_only=True: the checkpoint holds only tensors and a dict of
     # primitives, so there is no reason to allow arbitrary unpickling.
-    final = HierarchicalClassifier(cfg.backbone, mode=cfg.mode, pretrained=False).to(device)
-    final.load_state_dict(torch.load(ckpt_dir / "best.pt", weights_only=True)["model"])
-    test_stats = evaluate(final, loaders["test"], device, tta=cfg.tta)
+    # Load into the existing model rather than constructing another one. fit()
+    # already holds the live weights plus the EMA deepcopy; a third instance was
+    # enough, across ten sequential runs in one process, to fragment the CUDA
+    # allocator into an out-of-memory failure on run eleven.
+    model.load_state_dict(torch.load(ckpt_dir / "best.pt", weights_only=True)["model"])
+    test_stats = evaluate(model, loaders["test"], device, tta=cfg.tta)
 
     summary = {
         **asdict(cfg),
@@ -471,6 +474,16 @@ def fit(cfg: ExperimentConfig, split_df: pd.DataFrame | None = None,
         print(f"  -> test macro_f1 {test_stats['macro_f1']:.4f}  "
               f"bal_acc {test_stats['balanced_accuracy']:.4f}  "
               f"cross-lineage err {test_stats['cross_lineage_error']:.4f}")
+
+    # Release GPU memory before the caller starts the next run. A matrix runs
+    # every configuration inside one process, so anything left referenced here
+    # accumulates: model + EMA copy + AdamW's two momentum buffers per parameter,
+    # times however many runs have gone before. Ten runs was enough to exhaust
+    # 8 GB. Dropping the DataLoaders also reaps their persistent workers.
+    del model, criterion, optimiser, scheduler, ema, loaders
+    if device == "cuda":
+        torch.cuda.empty_cache()
+
     return summary
 
 

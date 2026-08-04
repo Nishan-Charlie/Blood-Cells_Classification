@@ -21,35 +21,83 @@ This repository holds both the implementation and the written dissertation sourc
 
 ---
 
-## Results at a glance
+## Results
 
-Five experiments, one backbone (ViT-Small/16), identical splits, three training seeds each.
-Mean over seeds; the test set was held out until final evaluation.
+Five experiments, one backbone (ViT-Small/16), identical splits, three training seeds each,
+30 epochs per run. Mean over seeds; the test set was held out until final evaluation.
 
-| Arm | Macro F1 | Balanced acc. | Minority F1 | Cross-lineage error |
-|---|---:|---:|---:|---:|
-| **Hierarchical** (proposed) | **0.853** ± 0.014 | 0.860 | 0.791 | **0.0149** |
-| Flat baseline *(= hierarchy ablation)* | 0.845 ± 0.026 | **0.869** | **0.819** | 0.0202 |
-| − imbalance term | 0.824 ± 0.012 | 0.816 | 0.711 | 0.0209 |
-| Stain-normalised (Reinhard) | 0.824 ± 0.021 | 0.839 | 0.758 | 0.0239 |
+| Arm | Macro F1 | Balanced acc. | Minority F1 | Minority recall | Cross-lineage err. |
+|---|---:|---:|---:|---:|---:|
+| **Hierarchical** (proposed) | **0.8792** ± 0.0028 | **0.8936** | **0.8400** | **0.7987** | 0.0115 |
+| Flat baseline *(= hierarchy ablation)* | 0.8742 ± 0.0060 | 0.8832 | 0.8233 | 0.7761 | 0.0119 |
+| − imbalance term | 0.8733 ± 0.0093 | 0.8620 | 0.7799 | 0.7226 | **0.0104** |
+| Stain-normalised (Reinhard) | 0.8714 ± 0.0031 | 0.8832 | 0.8206 | 0.7753 | 0.0127 |
 
-**The result is mixed, and no comparison reaches significance at n = 3.**
+### What the evidence supports
 
-- The hierarchical model gives the **best macro F1** and cuts **cross-lineage error by 26%**
-  (0.0202 → 0.0149, Cohen's d = −1.27). That is the clinically meaningful direction: errors
-  move from severe (wrong lineage) to mild (wrong maturation stage within the right lineage).
-- But it does **not** improve the rare classes. Minority-class F1 is *lower* than the flat
-  baseline (0.791 vs 0.819), and so is balanced accuracy. The dissertation's central claim
-  about rare cell types is **not supported** by these runs.
-- The clearest effect in the whole study is the **imbalance term**: removing it costs 0.109
-  minority F1 (d = −1.63). The imbalance-robust objective is doing real work; the hierarchy
-  is doing something narrower than hoped.
-- **Stain normalisation did not help** on any metric.
+**The hierarchical model is best on every metric the research question concerns**, and the
+effect is consistent across four independent measures:
 
-Every p-value exceeds 0.05. With three seeds the paired t-test has 2 degrees of freedom and
-very little power, so these are *weak evidence of no difference, not evidence of no
-difference*. Effect sizes accompany every test because p-values alone cannot carry a
-conclusion at this sample size.
+| Hierarchical − flat baseline | Δ | p | Cohen's d |
+|---|---:|---:|---:|
+| Macro F1 | +0.0050 | 0.42 | +0.57 |
+| Balanced accuracy | +0.0103 | 0.20 | +1.08 |
+| Minority macro F1 | +0.0167 | 0.28 | +0.84 |
+| Minority recall | +0.0226 | 0.21 | +1.04 |
+
+**No comparison reaches p < 0.05.** With three seeds the paired t-test has 2 degrees of
+freedom; at the observed effect sizes it has roughly 15–20% power, so it was always more
+likely to miss a real effect than to find one. Reaching 80% power would need about **10–13
+seeds**. Four metrics moving the same direction with moderate-to-large effect sizes is
+suggestive, but this study does not establish the hierarchy's benefit at conventional
+significance.
+
+**The imbalance-robust objective is the dominant component.** Removing it costs 0.053
+minority recall (p = 0.058, d = −2.28) and 0.021 balanced accuracy (p = 0.080, d = −1.92) —
+consistently the largest effects in the study, and several times the hierarchy's own
+contribution. The dissertation's title leads with the hierarchy, but the imbalance treatment
+is doing most of the work.
+
+**Stain normalisation has no measurable effect** (balanced accuracy 0.8832 vs 0.8832; every
+comparison p > 0.7).
+
+**Cross-lineage error is the only p < 0.05 result** (hierarchical vs flat, p = 0.0198,
+d = −4.04) — but read the magnitude before the p-value: 0.0115 vs 0.0119 is a difference of
+about **2.5 images out of 6,244**. It is significant only because the variance is now
+minuscule (sd ≈ 0.0007). Statistically detectable, practically negligible; the write-up must
+state both.
+
+### A methodological finding: macro F1 is the wrong headline metric
+
+Removing the imbalance term changes:
+
+```
+macro precision   +0.0170     ← rises
+macro recall      −0.0316     ← falls
+                  ─────────
+macro F1          −0.0059     ← cancels out  (p = 0.90)
+balanced accuracy −0.0316     ← no cancellation (it IS macro recall)
+plain accuracy    +0.0035     ← rises
+```
+
+Without class re-weighting the model becomes conservative about rare classes: recall falls,
+but precision *rises* because it makes fewer false positives. F1 is the harmonic mean, so the
+two effects partially cancel and **macro F1 is nearly blind to the intervention** — it reports
+−0.006 (p = 0.90) where minority recall reports −0.053 (d = −2.28). Balanced accuracy is macro
+recall, so nothing cancels.
+
+Two consequences:
+
+1. **Balanced accuracy and minority recall should lead the write-up**, not macro F1, despite
+   CLAUDE.md designating macro F1 as headline.
+2. **Model selection currently runs on that blind metric.** `engine.fit` selects checkpoints on
+   validation macro F1. Re-selecting on balanced accuracy would change the chosen epoch in 5 of
+   10 runs, but gains only ≈ +0.008 validation minority F1 on average — real, small, and not
+   worth a full re-run.
+
+Note also that **plain accuracy *rises* (+0.0035) when imbalance handling is removed** — the
+exact failure mode this dissertation exists to study, demonstrated on its own runs rather than
+merely asserted.
 
 **Backbone screen** (6 epochs each, selection on validation macro F1):
 
@@ -63,7 +111,42 @@ conclusion at this sample size.
 Six epochs need not rank backbones the way a full run would. This is a *selection* step, not
 the backbone comparison result.
 
-Total compute: **16 runs, ~10.1 GPU-hours** on an RTX 4070 Laptop (8.6 GB).
+Total compute: **12 runs, 24.2 GPU-hours** on an RTX 4070 Laptop (8.6 GB).
+
+---
+
+## A note on the first experiment matrix
+
+An earlier complete matrix (archived in [archive/v1_baseline/](archive/v1_baseline/)) produced
+weaker numbers **and the opposite conclusion** about rare cell types. It was invalid, for
+reasons unrelated to the methods under test. This is documented because the failure is
+instructive, and because the corrected result depends on understanding it.
+
+**Run length, not method, drove the v1 rankings** — `corr(epochs_run, test_macro_f1) = +0.87`.
+The cosine LR schedule was defined over 50 configured epochs while early stopping fired at
+12–37, so runs halted at up to **86% of peak learning rate**, never annealed. Early stopping
+was itself firing on noise: validation macro F1 moved with sd 0.021 between consecutive epochs
+while the effects under study were 0.008–0.028. **The measurement noise exceeded the effect
+size**, so no number of seeds could have made v1 conclusive.
+
+Correcting the protocol — fixed 30-epoch budget so cosine completes, weight EMA, TTA,
+RandAugment + CutMix — lifted every arm and cut seed-to-seed variance up to 8×:
+
+| Arm | Macro F1 v1 → v2 | Minority F1 v1 → v2 | Seed sd v1 → v2 |
+|---|---|---|---|
+| flat_baseline | 0.8447 → 0.8742 | 0.8191 → 0.8233 | 0.0262 → 0.0060 |
+| hierarchical | 0.8532 → 0.8792 | 0.7909 → **0.8400** | 0.0141 → 0.0028 |
+| no_imbalance | 0.8238 → 0.8733 | 0.7106 → 0.7799 | 0.0115 → 0.0093 |
+| stain_norm | 0.8235 → 0.8714 | 0.7582 → 0.8206 | 0.0207 → 0.0031 |
+
+**Two v1 conclusions reversed sign.** v1 reported the hierarchy *reducing* minority F1 by 0.028
+and balanced accuracy by 0.010; with the protocol fixed both flip positive (+0.017, +0.010).
+The v1 finding that "the dissertation's central claim about rare cell types is not supported"
+was an artifact of the flat baseline being the arm least penalised by the truncated schedule.
+
+Also fixed: `aug_policy` was a **dead config field** — `build_loaders` never passed it to the
+dataset, so every v1 run trained on the `basic` policy regardless of what its config recorded.
+The `aug_policy` column in v1's `summary.csv` is fiction.
 
 ---
 
@@ -87,15 +170,15 @@ Erythroid  (2,071)   normoblasts 2,071
 
 Two things about this ordering are deliberate and must not be "tidied":
 
-1. **The imbalance is the subject matter, not an obstacle.** It is handled in the loss and
-   left intact in the data. Do not resample it away.
-2. **Myeloid classes follow the maturation continuum** (myeloblast → promyelocyte →
-   myelocyte → metamyelocyte → band → segmented). Confusion matrices plotted in index order
-   therefore place biologically adjacent stages next to each other, which is exactly where
-   the clinically expected errors land.
+1. **The imbalance is the subject matter, not an obstacle.** It is handled in the loss and left
+   intact in the data. Do not resample it away.
+2. **Myeloid classes follow the maturation continuum** (myeloblast → promyelocyte → myelocyte →
+   metamyelocyte → band → segmented). Confusion matrices plotted in index order therefore place
+   biologically adjacent stages next to each other, which is exactly where the clinically
+   expected errors land.
 
-> **Data lives at `D:\MLL23`, not in this repository** (~10 GB extracted, plus ~21 GB of
-> decode caches). Override the location with the `MLL23_ROOT` environment variable.
+> **Data lives at `D:\MLL23`, not in this repository** (~10 GB extracted, plus ~21 GB of decode
+> caches). Override the location with the `MLL23_ROOT` environment variable.
 
 ---
 
@@ -104,8 +187,8 @@ Two things about this ordering are deliberate and must not be "tidied":
 ```
                      288×288 TIFF
                           │  resize 224×224, ImageNet normalisation
-                          │  train only: flips, rotation ≤90°, jitter
-                          │             (intensified for minority classes)
+                          │  train only: RandAugment + flips/rotation
+                          │             (intensified for minority classes), CutMix
                           ▼
         ┌──────────────────────────────────┐
         │  shared pretrained backbone      │   ViT-Small/16
@@ -124,15 +207,21 @@ L = λ_lin·L(logits₁, y₁) + λ_fine·L(logits₂, y₂) + λ_cons·KL(margi
 ```
 
 The **consistency term** is what makes this hierarchical rather than merely multi-task: it
-marginalises the fine posterior into lineage space and penalises disagreement with the
-lineage head. Without it the two heads can contradict each other freely, and the claim that
-"the coarse decision regularises the fine one" has no mechanism behind it.
+marginalises the fine posterior into lineage space and penalises disagreement with the lineage
+head. Without it the two heads can contradict each other freely, and the claim that "the coarse
+decision regularises the fine one" has no mechanism behind it.
 
 `λ_cons` is deliberately small (0.1). Notebook 02 measured the lineage structure and found it
 **local, not global** — lineage silhouette ≈ 0, but k-NN lineage agreement ≈ 0.78 against a
 ~0.45 chance baseline. So the lineage head is a *regulariser, not a gate*: a hard gate routing
 samples to per-lineage sub-classifiers would assume a separability the data rejects, and every
 gate misfire would be an unrecoverable cross-lineage error.
+
+> **Known limitation of this design.** By the end of training the lineage head reaches ~98.9%
+> accuracy and both auxiliary losses collapse to ≈ 0.0007 — the hierarchy stops contributing
+> gradient well before training ends. Lineage is the *easy* axis; the hard problem is
+> discrimination *within* a lineage. That the hierarchy still helps at all is notable, but it
+> caps how much it can help. See "Further work" below.
 
 ### The five experiments
 
@@ -149,9 +238,7 @@ per-variant scripts.
 
 > **Experiments 1 and 4 are the same model.** "The hierarchical model with the hierarchy
 > removed" *is* the flat single-head baseline. It is trained once and reported twice — four
-> distinct configurations, not five. Training it under two names would spend a fifth of the
-> budget producing two draws from one distribution and invite the reader to mistake them for
-> independent evidence.
+> distinct configurations, not five.
 
 ---
 
@@ -176,11 +263,12 @@ python -m src.experiments --phase smoke
 
 # 5. Backbone screen, then the five experiments.
 python -m src.experiments --phase screen --epochs 6
-python -m src.experiments --phase main --backbone vit --epochs 20
+python -m src.experiments --phase main --backbone vit --epochs 30
 ```
 
 Both training phases are **resumable**: `run_matrix` skips any run already present in
 `results/summary.csv`, so re-running after an interruption costs only the unfinished runs.
+This was exercised in practice — a CUDA OOM on run 11 of 12 cost only the run in flight.
 
 ---
 
@@ -203,7 +291,7 @@ src/
   models.py       HierarchicalClassifier: shared backbone -> two heads
   losses.py       class-balanced weights, focal loss, HierarchicalLoss  <- ablations here
   metrics.py      macro/balanced metrics + within- vs cross-lineage error split
-  engine.py       ExperimentConfig and the single training loop
+  engine.py       ExperimentConfig, EMA, TTA, and the single training loop
   experiments.py  the arms declared as data; CLI entry point
   stats.py        paired t-tests across seeds, Cohen's d
   gradcam.py      saliency over the final backbone stage (ViT-aware)
@@ -219,6 +307,7 @@ notebooks/
   05_evaluation.ipynb          confusion matrices, per-class, Grad-CAM
 results/        summary.csv (one row per run) + history_*.csv (per epoch)
 checkpoints/    best.pt per run, selected on validation macro F1
+archive/        v1_baseline/ - the superseded first matrix, kept as evidence
 artifacts/      generated figures
 docs/           design specs
 ```
@@ -229,63 +318,61 @@ fails loudly if the invariants break.
 
 ---
 
-## Evaluation approach
-
-**Accuracy is explicitly rejected as a headline metric.** At 260:1 imbalance, a classifier
-that ignores reactive lymphocytes entirely loses ~0.08% accuracy — accuracy cannot see the
-behaviour this dissertation is about. Macro F1 and balanced accuracy are the headline numbers,
-and model selection is on **validation macro F1**.
-
-Beyond the standard metrics, [metrics.py](src/metrics.py) decomposes every prediction into
-**correct / within-lineage error / cross-lineage error**. This is the direct test of the
-thesis: a lineage-aware model should shift errors toward the clinically milder within-lineage
-kind even when overall accuracy barely moves — a shift no scalar metric expresses.
-
-Grad-CAM maps are a deliverable, not decoration: they are the evidence that the model attends
-to nucleus, chromatin, and cytoplasm rather than to background or staining artefacts. A model
-with strong macro F1 and saliency on the background has learned an acquisition confound.
-
----
-
-## Four traps worth knowing
+## Five traps worth knowing
 
 Each of these ran fine while being wrong. All are commented at their site in the code and
 detailed in [the design spec](docs/superpowers/specs/2026-08-01-modelling-pipeline-design.md).
 
-1. **Mixed precision must be bf16, not fp16.** An fp16 run reached val macro F1 0.80, then
-   went NaN at epoch 3 and never recovered. Related: the `clamp_min(1e-8)` guard in the
-   consistency term is a *no-op under fp16* — 1e-8 rounds to exactly zero at that precision.
+1. **Mixed precision must be bf16, not fp16.** An fp16 run reached val macro F1 0.80, then went
+   NaN at epoch 3 and never recovered. Related: the `clamp_min(1e-8)` guard in the consistency
+   term is a *no-op under fp16* — 1e-8 rounds to exactly zero at that precision.
 2. **`backbone.num_features` is wrong for MobileNetV3** (reports 960; the real pooled width is
    1280). [models.py](src/models.py) measures it with a dummy forward instead.
 3. **Grad-CAM on ViT must hook `blocks[-1].norm1`, not `blocks[-1]`.** timm's ViT pools the
-   class token only, so patch-token gradients at the final block are *exactly zero* —
-   producing a flat map that still looks like a legitimate figure. Measured gradient
-   magnitude: 0.0 vs 6.6e-2.
+   class token only, so patch-token gradients at the final block are *exactly zero* — producing
+   a flat map that still looks like a legitimate figure. Measured: 0.0 vs 6.6e-2.
 4. **Never hand an open `np.memmap` to a DataLoader worker.** Windows spawns workers, so the
    memmap is pickled in full — 10 GB per worker. Pass the path and map it lazily per process.
+5. **Free the model between runs in a matrix.** A matrix trains every configuration in one
+   process; model + EMA copy + AdamW momentum buffers accumulate until the allocator fragments.
+   This exhausted 8 GB on run 11 of 12.
 
 ### Performance note
 
 Without the decode cache the pipeline is **data-bound, not GPU-bound**: 178 img/s decoding
 TIFFs at `num_workers=4`, and *slower* at 8 (119 img/s) from contention, against ~850 img/s
-cached. `NUM_WORKERS = 4` is measured, not guessed.
+cached. `NUM_WORKERS = 4` is measured, not guessed. RandAugment roughly doubles per-epoch cost
+(≈60 s → ≈101 s) because it runs on the CPU dataloader.
 
 ---
 
 ## Known limitations
 
-- **Three seeds is a thin basis for a t-test** (2 d.f.). No comparison reaches significance;
-  effect sizes and per-seed values are reported so no conclusion rests on a p-value alone.
+- **Underpowered.** Three seeds gives 2 d.f.; at the observed effect sizes, power is ~15–20%.
+  The hierarchy's benefit is directionally consistent across four metrics but not established
+  at p < 0.05. Roughly 10–13 seeds would be needed.
 - **CLAUDE.md specifies "paired t-test across validation folds", but there are no folds.**
-  `splits.py` produces one fixed deterministic split, which must stay identical across arms
-  for the ablations to mean anything. Paired samples come from retraining at multiple seeds
-  instead. The write-up sentence needs correcting.
-- **Reactive lymphocytes (n = 33) leave ~23 training and ~5 test images.** Per-class F1 for
-  this class moves in large increments — a single prediction flips it substantially. Report
-  the number; do not build an argument on its movement between arms.
+  `splits.py` produces one fixed deterministic split, which must stay identical across arms for
+  the ablations to mean anything. Paired samples come from retraining at multiple seeds instead.
+- **Reactive lymphocytes (n = 33) leave ~23 training and ~5 test images.** Per-class F1 for this
+  class moves in large increments — a single prediction flips it substantially. Report the
+  number; do not build an argument on its movement between arms.
 - **The backbone screen is a selection step**, not a controlled backbone comparison.
 - `Data_Analysis.tex` still specifies 384×384 for Vision Transformers; the resolution was
   resolved to **224 for every backbone** so the comparison stays controlled.
+
+## Further work
+
+In priority order, from the diagnosis above:
+
+1. **Make the hierarchy target an axis that is still hard.** The lineage head saturates at
+   98.9%. Either factor the prediction as `p(y₂|x) = p(y₁|x)·p(y₂|y₁,x)` so the coarse decision
+   genuinely constrains the fine one, or retarget the auxiliary task at myeloid *maturation
+   stage*, where the residual confusion actually lives.
+2. **Attack the tail directly** with decoupled training (cRT) — learn the representation with
+   instance-balanced sampling, then retrain only the classifier with class-balanced sampling —
+   or logit adjustment / LDAM margin loss.
+3. **Raise statistical power** to 10–13 seeds on the two primary arms.
 
 ---
 

@@ -379,7 +379,47 @@ identical data and seed):
 | **val macro-F1 epoch-to-epoch sd** | **0.0211** | **0.0097** | **−54%** |
 
 Cost: ~101 s/epoch versus v1's ~60 s, from RandAugment on the CPU dataloader. Roughly 10 h
-for 12 runs rather than the 6-8 h originally estimated.
+for 12 runs rather than the 6-8 h originally estimated. Actual: **24.2 GPU-hours**, inflated by
+occasional multi-minute epoch stalls (one epoch took 65 minutes against a ~100 s median),
+attributable to page-cache pressure - the 10.4 GB cache sits against ~10 GB of free RAM.
+
+### Final v2 results (12 runs, 3 seeds per arm, 30 epochs each)
+
+| Arm | Macro F1 | Balanced acc | Minority F1 | Minority recall | Cross-lineage |
+|---|---:|---:|---:|---:|---:|
+| hierarchical | 0.8792 ± 0.0028 | 0.8936 | 0.8400 | 0.7987 | 0.0115 |
+| flat_baseline | 0.8742 ± 0.0060 | 0.8832 | 0.8233 | 0.7761 | 0.0119 |
+| no_imbalance | 0.8733 ± 0.0093 | 0.8620 | 0.7799 | 0.7226 | 0.0104 |
+| stain_norm | 0.8714 ± 0.0031 | 0.8832 | 0.8206 | 0.7753 | 0.0127 |
+
+Every run completed exactly 30 epochs, so the run-length confound is eliminated by
+construction rather than merely reduced.
+
+**Two v1 conclusions reversed sign.** v1 reported the hierarchy reducing minority F1 by 0.028
+and balanced accuracy by 0.010; both flip positive under the corrected protocol (+0.017,
++0.010). The v1 write-up's statement that the rare-cell-type claim was "not supported" was an
+artifact of the flat baseline being the arm least penalised by schedule truncation.
+
+The hierarchy now leads on all four primary metrics with consistent moderate-to-large effect
+sizes (d = +0.57 to +1.08), but **none reach p < 0.05 at n = 3** - power is roughly 15-20%, so
+about 10-13 seeds would be required. The imbalance term remains the dominant component
+(removing it costs 0.053 minority recall, d = -2.28).
+
+### Methodological finding: macro F1 is insensitive to imbalance interventions
+
+Removing the imbalance term moves macro precision **+0.017** and macro recall **-0.032**, so
+macro F1 nets **-0.006 (p = 0.90)** while balanced accuracy - which is macro recall, and has no
+cancelling term - moves the full **-0.032**. Minority recall moves -0.053.
+
+Macro F1 is therefore a poor headline metric *and a poor model-selection criterion* for this
+study, despite CLAUDE.md designating it as both. Plain accuracy is worse still: it *rises*
+(+0.0035) when imbalance handling is removed, which is the failure mode the dissertation
+exists to study.
+
+Re-selecting checkpoints on validation balanced accuracy was evaluated without re-training, by
+re-reading the per-epoch histories: it would change the selected epoch in **5 of 10 runs** but
+gain only **+0.008** validation minority F1 on average. Real, small, and not worth a re-run -
+recorded here so the decision is not revisited blindly.
 
 ## Not implemented: further improvements, in priority order
 

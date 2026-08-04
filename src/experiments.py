@@ -28,9 +28,11 @@ explicitly so the write-up cannot lose it.
 from __future__ import annotations
 
 import argparse
+import gc
 from dataclasses import replace
 
 import pandas as pd
+import torch
 
 from . import engine, splits
 from .engine import ExperimentConfig
@@ -157,6 +159,13 @@ def run_matrix(configs: list[ExperimentConfig], *, skip_completed: bool = True,
             continue
         print(f"[{i}/{len(configs)}] {cfg.run_id}", flush=True)
         rows.append(engine.fit(cfg, split_df, verbose=verbose))
+
+        # Second line of defence against the allocator fragmenting across a long
+        # matrix. fit() already frees its own tensors; this collects anything the
+        # interpreter is still holding a reference to before the next run starts.
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     return pd.DataFrame(rows)
 
