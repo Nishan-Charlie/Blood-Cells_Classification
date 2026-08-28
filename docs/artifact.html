@@ -3,39 +3,42 @@
 
 <style>
 :root{
-  --ground:#f5efe6; --surface:#fdfaf6; --surface-2:#eee8dc;
-  --ink:#1a1209; --ink-2:#5c4d3a; --ink-3:#8c7c68;
+  --ground:#ffffff; --surface:#f8f9fa; --surface-2:#e9ecef;
+  --ink:#212529; --ink-2:#495057; --ink-3:#6c757d;
   --stain:#6d3f97; --stain-soft:#f0eaf7;
-  --rule:#d9cdc0; --rule-2:#e8dfd6;
+  --rule:#dee2e6; --rule-2:#ced4da;
   --blue:#0072B2; --amber:#E69F00;
-  --maxw:768px;
+  --maxw:960px;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --ground:#1c1610; --surface:#241c12; --surface-2:#2d2319;
-    --ink:#ece7df; --ink-2:#b0a090; --ink-3:#7b6e60;
+    --ground:#1a1a1a; --surface:#242424; --surface-2:#2e2e2e;
+    --ink:#f8f9fa; --ink-2:#ced4da; --ink-3:#adb5bd;
     --stain:#c4a0f0; --stain-soft:#2d1e3a;
-    --rule:#3a2f24; --rule-2:#2d2318;
+    --rule:#495057; --rule-2:#343a40;
     --blue:#4ea8e0; --amber:#e8b34a;
   }
 }
 :root[data-theme="dark"]{
-  --ground:#1c1610; --surface:#241c12; --surface-2:#2d2319;
-  --ink:#ece7df; --ink-2:#b0a090; --ink-3:#7b6e60;
+  --ground:#1a1a1a; --surface:#242424; --surface-2:#2e2e2e;
+  --ink:#f8f9fa; --ink-2:#ced4da; --ink-3:#adb5bd;
   --stain:#c4a0f0; --stain-soft:#2d1e3a;
-  --rule:#3a2f24; --rule-2:#2d2318;
+  --rule:#495057; --rule-2:#343a40;
   --blue:#4ea8e0; --amber:#e8b34a;
 }
 
 *{box-sizing:border-box}
 body{
   background:var(--ground); color:var(--ink);
-  font-family:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  font-family:"Times New Roman",Times,serif;
   font-size:17px; line-height:1.62; margin:0;
   -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:var(--maxw); margin:0 auto; padding:0 40px}
-.wide{max-width:1080px; margin:0 auto; padding:0 40px}
+header,nav,.pill,figcaption,.byline,.affil,.links,.kicker,table{
+  font-family:Arial,Calibri,sans-serif;
+}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+.wide{max-width:1080px; margin:0 auto; padding:0 24px}
 
 /* ---------- masthead ---------- */
 header{padding:72px 0 0; text-align:center}
@@ -45,9 +48,9 @@ header{padding:72px 0 0; text-align:center}
   color:var(--ink-3); margin-bottom:22px;
 }
 h1{
-  font-family:Newsreader,Georgia,serif; font-weight:500;
+  font-family:"Times New Roman",Times,serif; font-weight:500;
   font-size:clamp(30px,4.6vw,46px); line-height:1.16; letter-spacing:-.012em;
-  margin:0 auto 22px; max-width:16ch; text-wrap:balance; color:var(--ink);
+  margin:0 auto 22px; text-wrap:balance; color:var(--ink);
 }
 h1 .lo{display:block; font-size:.66em; font-style:italic; color:var(--ink-2); margin-top:.34em; font-weight:400}
 .byline{font-size:17px; margin:0 0 4px}
@@ -192,6 +195,11 @@ footer p{margin:0 0 6px}
     <p class="affil"><span class="todo">Institution — to be added</span></p>
 
     <nav class="links">
+      <button class="pill ghost" id="theme-toggle" aria-label="Toggle Theme" style="cursor:pointer">
+        <svg id="theme-icon-dark" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <svg id="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        Theme
+      </button>
       <a class="pill" href="https://github.com/Nishan-Charlie/Blood-Cells_Classification">
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
         Code
