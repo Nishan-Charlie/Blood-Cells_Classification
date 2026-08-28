@@ -40,3 +40,20 @@ venv/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# --- Third-party course material --------------------------------------------
+# Supervisor handouts and lecture decks (Angela Manser slides, referencing
+# guides, the dissertation template, the password-protected proposal). These
+# are other people's copyrighted teaching material and ~16 MB besides, so they
+# stay local and are not redistributed from this repository.
+references/
+
+# --- Archived v1 run ---------------------------------------------------------
+# archive/v1_baseline/results/*.csv IS tracked on purpose: Chapter 4 discusses
+# why the first matrix was invalidated, and the per-epoch histories are the
+# evidence for that. Only the 1.7 GB of v1 weights is excluded.
+archive/**/checkpoints/
+
+# --- Scratch -----------------------------------------------------------------
+scratch/
+*.tmp

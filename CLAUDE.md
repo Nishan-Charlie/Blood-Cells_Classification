@@ -108,28 +108,55 @@ Data-loading is the bottleneck without the cache: 178 img/s decoding TIFFs
 (and *slower* at `num_workers=8` — 119 img/s — from contention) versus ~850 img/s
 cached. `NUM_WORKERS = 4` is measured, not guessed.
 
-## LaTeX build
+## Document layout and LaTeX build
 
-Two documents are compiled from source. Both use `\begin{thebibliography}` inline, so **no BibTeX/biber run is needed** — but each still needs **two `pdflatex` passes** to resolve cross-references and (for the slides) the navigation bar.
+Every written artefact lives under `docs/`:
+
+```
+docs/
+  thesis/   Dissertation.docx  <- the submitted document, built by scripts/build_dissertation/
+            Methodology.tex/.pdf, Literature_Review.tex/.pdf/.docx, Data_Analysis.tex/.pdf
+  slides/   Proposal_Slides, Progress_Slides, Progress_Summary_Slides  (.tex + .pdf)
+  assets/   cell_category.pdf (lineage tree), Methodology-1.pdf (pipeline diagram)
+  specs/    modelling-pipeline design spec
+```
+
+`Dissertation.docx` is **generated, not hand-edited.** It is assembled by the
+python-docx build in `scripts/build_dissertation/`; edit the chapter modules
+there and re-run `build.py`, or your changes will be overwritten.
+
+The LaTeX documents use `\begin{thebibliography}` inline, so **no BibTeX/biber run
+is needed** — but each still needs **two `pdflatex` passes** to resolve
+cross-references and (for the slides) the navigation bar. Compile from the file's
+own directory, since `\graphicspath` is relative:
 
 ```bash
-pdflatex -interaction=nonstopmode -halt-on-error Literature_Review.tex   # run twice
-pdflatex -interaction=nonstopmode -halt-on-error Proposal_Slides.tex     # run twice
+cd docs/thesis  && pdflatex -interaction=nonstopmode -halt-on-error Methodology.tex   # twice
+cd docs/slides  && pdflatex -interaction=nonstopmode -halt-on-error Proposal_Slides.tex  # twice
 ```
 
 TeX Live 2026 is installed at `/c/texlive/2026/bin/windows/`.
 
-`Proposal_Slides.tex` `\includegraphics` two figure PDFs that must stay in the same folder: `cell_category.pdf` (the lineage tree) and `Methodology-1.pdf` (the pipeline diagram).
+Figures resolve through `\graphicspath{{../../artifacts/}{../assets/}{./}}` —
+generated figures come from `artifacts/`, hand-drawn figure PDFs from
+`docs/assets/`. Moving a `.tex` between directories breaks both; fix the
+graphicspath depth if you do.
 
-After a successful build, clean the intermediates rather than leaving them beside the sources:
+Intermediates (`.aux`, `.log`, `.nav`, `.fls`, …) are gitignored, but clean them
+after a build rather than leaving them beside the sources.
 
-```bash
-rm -f Literature_Review.aux Literature_Review.log Literature_Review.out
-rm -f Proposal_Slides.aux Proposal_Slides.log Proposal_Slides.nav \
-      Proposal_Slides.out Proposal_Slides.snm Proposal_Slides.toc
-```
+`Data_Analysis.tex` is a standalone fragment that is not wired into a parent
+document.
 
-`Data_Analysis.tex` is a standalone fragment that is not yet wired into a parent document.
+## What is deliberately not in the repository
+
+`.gitignore` excludes, with reasons recorded there: the MLL23 corpus (~10 GB, on
+`D:\`, redistributable from Zenodo), model weights, `references/` (third-party
+course handouts — other people's copyrighted teaching material), and
+`archive/**/checkpoints/` (1.7 GB of superseded v1 weights). The v1 *result CSVs*
+under `archive/v1_baseline/results/` **are** tracked on purpose: Chapter 4
+discusses why the first matrix was invalidated, and those per-epoch histories are
+the evidence.
 
 ## The research design the code must implement
 

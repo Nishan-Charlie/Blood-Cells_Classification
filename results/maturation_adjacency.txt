@@ -1,0 +1,44 @@
+  seed 0 done
+  seed 1 done
+  seed 2 done
+
+==============================================================
+1. GLOBAL ERROR STRUCTURE (3 seeds pooled)
+==============================================================
+total test predictions : 18732
+errors                 : 811  (0.0433)
+  within-lineage       : 595  (0.734 of errors)
+  cross-lineage        : 216  (0.266 of errors)
+
+==============================================================
+2. ERRORS INSIDE THE MATURATION CHAIN
+==============================================================
+predictions with both true and pred in chain : 8216
+  of which errors                            : 305
+
+signed stage distance (pred - true):
+  -2 stages :     7  (0.023)  #
+  -1 stage  :   120  (0.393)  #######################
+  +1 stage  :   174  (0.570)  ##################################
+  +2 stages :     4  (0.013)  
+
+adjacent (|d| = 1) : 294/305 = 0.964 of in-chain errors
+|d| <= 1           : 0.964
+|d| >= 3           : 0.000
+
+==============================================================
+3. WHERE DOES EACH CHAIN CLASS SEND ITS ERRORS?
+==============================================================
+Myeloblasts              (n_err=  59) -> Typical lymphocytes 47%, Monocytes 22%, Smudge cells 8%
+Promyelocytes            (n_err=  64) -> Myelocytes 88%, Atypical promyelocytes 9%, Myeloblasts 3%
+Myelocytes               (n_err=  83) -> Metamyelocytes 45%, Promyelocytes 42%, Atypical promyelocytes 7%
+Metamyelocytes           (n_err=  69) -> Band neutrophils 65%, Myelocytes 35%
+Band neutrophils         (n_err=  69) -> Segmented neutrophils 51%, Metamyelocytes 35%, Myelocytes 10%
+Segmented neutrophils    (n_err=  43) -> Band neutrophils 81%, Smudge cells 14%, Typical lymphocytes 5%
+
+==============================================================
+4. SHARE OF ALL ERRORS THAT ARE ADJACENT-STAGE CONFUSIONS
+==============================================================
+adjacent-stage errors / all errors : 294/811 = 0.363
+(these are the mildest errors clinically, and are currently penalised
+ identically to a lymphoid/myeloid confusion)

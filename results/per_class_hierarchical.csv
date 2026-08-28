@@ -1,0 +1,19 @@
+class_name,f1,f1_sd,recall,precision
+Typical lymphocytes,0.9372,0.0036,0.9325,0.942
+Hairy cells,0.9819,0.0026,0.9939,0.9701
+Large granular lymphocytes,0.9189,0.0043,0.9305,0.9079
+Atypical lymphocytes (plasma cells),0.9946,0.0012,0.996,0.9933
+Smudge cells,0.9601,0.0039,0.9482,0.9723
+Neoplastic lymphocytes,0.7391,0.0166,0.8395,0.6602
+Reactive lymphocytes,0.43,0.0308,0.6,0.3361
+Myeloblasts,0.9863,0.0006,0.9848,0.9878
+Promyelocytes,0.8396,0.0131,0.8095,0.8722
+Atypical promyelocytes,0.988,0.001,0.9923,0.9838
+Myelocytes,0.7396,0.0152,0.753,0.7269
+Metamyelocytes,0.6774,0.0116,0.6806,0.6743
+Band neutrophils,0.7535,0.0205,0.7767,0.7316
+Segmented neutrophils,0.9842,0.0005,0.9867,0.9818
+Eosinophil granulocytes,0.9909,0.0008,0.9846,0.9972
+Basophil granulocytes,0.9819,0.0084,0.9819,0.9819
+Monocytes,0.9395,0.0006,0.9204,0.9595
+Normoblasts,0.9827,0.0034,0.9732,0.9924
