@@ -35,6 +35,7 @@ __pycache__/
 .venv/
 venv/
 .env
+CLAUDE.md
 
 # --- OS ----------------------------------------------------------------------
 Thumbs.db
@@ -60,3 +61,8 @@ scratch/
 
 # Stale build location — Dissertation.docx now builds to docs/thesis/.
 drafts/
+
+# Project instructions for Claude Code — local working notes, not part of the
+# published record. NOTE: this file already exists in pushed history; ignoring
+# it stops future updates being published but does not remove what is there.
+CLAUDE.md
