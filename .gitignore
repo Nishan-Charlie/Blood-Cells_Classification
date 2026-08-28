@@ -57,3 +57,6 @@ archive/**/checkpoints/
 # --- Scratch -----------------------------------------------------------------
 scratch/
 *.tmp
+
+# Stale build location — Dissertation.docx now builds to docs/thesis/.
+drafts/

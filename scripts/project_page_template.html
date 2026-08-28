@@ -1,0 +1,385 @@
+<title>Lineage-Aware Blood Cell Classification</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --ground:#faf8f7; --surface:#ffffff; --surface-2:#f4f1f6;
+  --ink:#191320; --ink-2:#5d5566; --ink-3:#8b8394;
+  --stain:#6d3f97; --stain-soft:#f0eaf7;
+  --rule:#e7e2ea; --rule-2:#f0ecf2;
+  --blue:#0072B2; --amber:#E69F00;
+  --maxw:768px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#141019; --surface:#1b1622; --surface-2:#221c2b;
+    --ink:#ece7f1; --ink-2:#a79eb3; --ink-3:#7b7288;
+    --stain:#b795e4; --stain-soft:#251c33;
+    --rule:#2f2739; --rule-2:#251e2e;
+    --blue:#4ea8e0; --amber:#e8b34a;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#141019; --surface:#1b1622; --surface-2:#221c2b;
+  --ink:#ece7f1; --ink-2:#a79eb3; --ink-3:#7b7288;
+  --stain:#b795e4; --stain-soft:#251c33;
+  --rule:#2f2739; --rule-2:#251e2e;
+  --blue:#4ea8e0; --amber:#e8b34a;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--ground); color:var(--ink);
+  font-family:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  font-size:17px; line-height:1.62; margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+.wide{max-width:1080px; margin:0 auto; padding:0 24px}
+
+/* ---------- masthead ---------- */
+header{padding:72px 0 0; text-align:center}
+.kicker{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); margin-bottom:22px;
+}
+h1{
+  font-family:Newsreader,Georgia,serif; font-weight:500;
+  font-size:clamp(30px,4.6vw,46px); line-height:1.16; letter-spacing:-.012em;
+  margin:0 auto 22px; max-width:16ch; text-wrap:balance; color:var(--ink);
+}
+h1 .lo{display:block; font-size:.66em; font-style:italic; color:var(--ink-2); margin-top:.34em; font-weight:400}
+.byline{font-size:17px; margin:0 0 4px}
+.byline strong{font-weight:600}
+.affil{color:var(--ink-2); font-size:14.5px; margin:0}
+.affil .todo{
+  color:var(--ink-3); border-bottom:1px dashed var(--rule);
+  font-style:italic;
+}
+
+.links{display:flex; flex-wrap:wrap; gap:9px; justify-content:center; margin:30px 0 0}
+.pill{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 16px; border-radius:100px;
+  background:var(--ink); color:var(--ground);
+  font-size:14px; font-weight:600; text-decoration:none;
+  border:1px solid var(--ink); transition:opacity .15s;
+}
+.pill:hover{opacity:.82}
+.pill.ghost{background:transparent; color:var(--ink); border-color:var(--rule)}
+.pill.ghost:hover{border-color:var(--stain); color:var(--stain); opacity:1}
+.pill svg{width:14px; height:14px; flex:none}
+
+/* ---------- figures ---------- */
+figure{margin:0}
+.fig{
+  background:var(--surface); border:1px solid var(--rule);
+  border-radius:3px; padding:14px; margin:0;
+}
+.fig img{width:100%; height:auto; display:block; border-radius:2px}
+figcaption{
+  font-size:13.5px; line-height:1.55; color:var(--ink-2);
+  margin-top:12px; text-align:left;
+}
+figcaption b{color:var(--ink); font-weight:600}
+.teaser{margin:44px 0 0}
+
+/* ---------- sections ---------- */
+section{padding:52px 0 0}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--stain); margin:0 0 10px;
+}
+h2{
+  font-family:Newsreader,Georgia,serif; font-weight:500;
+  font-size:27px; line-height:1.25; margin:0 0 18px; letter-spacing:-.008em;
+  text-wrap:balance;
+}
+h3{font-size:16px; font-weight:600; margin:30px 0 8px; letter-spacing:.002em}
+p{margin:0 0 17px}
+a{color:var(--stain); text-decoration-thickness:1px; text-underline-offset:2px}
+.lede{font-size:18.5px; line-height:1.6; color:var(--ink-2)}
+hr{border:0; border-top:1px solid var(--rule-2); margin:52px 0 0}
+
+/* ---------- numbers strip ---------- */
+.stats{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule);
+  border-radius:3px; overflow:hidden; margin:8px 0 0;
+}
+.stat{background:var(--surface); padding:17px 16px}
+.stat .n{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:23px; font-weight:500; letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums; color:var(--ink); display:block;
+}
+.stat .l{font-size:12.5px; color:var(--ink-2); line-height:1.4; margin-top:5px; display:block}
+
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px}
+th,td{padding:10px 14px; text-align:right; border-bottom:1px solid var(--rule-2)}
+th:first-child,td:first-child{text-align:left}
+thead th{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--ink-2); font-weight:500; border-bottom:1px solid var(--rule);
+}
+tbody td{font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+tr.hi td{background:var(--stain-soft)}
+tr.hi td:first-child{font-weight:600}
+.win{color:var(--blue); font-weight:600}
+.lose{color:var(--amber); font-weight:600}
+
+/* ---------- chain motif (content-true: these stages ARE ordered) ---------- */
+.chain{
+  display:flex; flex-wrap:wrap; align-items:center; gap:7px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12.5px;
+  padding:16px; background:var(--surface-2); border-radius:3px;
+  margin:0 0 18px; color:var(--ink-2);
+}
+.chain b{color:var(--ink); font-weight:500}
+.chain .arrow{color:var(--stain); opacity:.75}
+
+/* ---------- callout ---------- */
+.note{
+  border-left:2px solid var(--stain); padding:2px 0 2px 18px;
+  margin:0 0 17px; color:var(--ink-2); font-size:16px;
+}
+
+/* ---------- bibtex ---------- */
+pre{
+  background:var(--surface-2); border:1px solid var(--rule);
+  border-radius:3px; padding:16px 18px; overflow-x:auto;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:12.5px; line-height:1.7; color:var(--ink-2); margin:0;
+}
+pre .k{color:var(--stain)}
+
+/* ---------- resource list ---------- */
+.res{display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
+.res a{
+  display:flex; justify-content:space-between; align-items:baseline; gap:16px;
+  background:var(--surface); padding:14px 16px; text-decoration:none; color:var(--ink);
+  transition:background .12s;
+}
+.res a:hover{background:var(--stain-soft)}
+.res .t{font-weight:600; font-size:15px}
+.res .d{color:var(--ink-2); font-size:13px; text-align:right; font-family:"IBM Plex Mono",monospace}
+
+footer{margin-top:60px; padding:26px 0 70px; border-top:1px solid var(--rule-2); color:var(--ink-3); font-size:13.5px}
+footer p{margin:0 0 6px}
+
+@media (max-width:640px){
+  body{font-size:16px}
+  header{padding-top:48px}
+  .stat .n{font-size:20px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+:focus-visible{outline:2px solid var(--stain); outline-offset:3px; border-radius:2px}
+</style>
+
+<header>
+  <div class="wrap">
+    <p class="kicker">MSc Dissertation &middot; Computer Science</p>
+    <h1>Lineage-Aware Hierarchical Deep Learning
+      <span class="lo">for imbalanced classification of peripheral blood cells</span>
+    </h1>
+    <p class="byline"><strong>Arthiga Karthigesu</strong></p>
+    <p class="affil"><span class="todo">Institution — to be added</span></p>
+
+    <nav class="links">
+      <a class="pill" href="https://github.com/Nishan-Charlie/Blood-Cells_Classification">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Code
+      </a>
+      <a class="pill" href="https://doi.org/10.5281/zenodo.14277609">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><ellipse cx="8" cy="3.6" rx="5.6" ry="2.4"/><path d="M2.4 3.6v8.8c0 1.33 2.51 2.4 5.6 2.4s5.6-1.07 5.6-2.4V3.6M2.4 8c0 1.33 2.51 2.4 5.6 2.4s5.6-1.07 5.6-2.4"/></svg>
+        Dataset
+      </a>
+      <a class="pill ghost" href="https://github.com/Nishan-Charlie/Blood-Cells_Classification/tree/main/docs/thesis">Thesis</a>
+      <a class="pill ghost" href="https://github.com/Nishan-Charlie/Blood-Cells_Classification/tree/main/docs/slides">Slides</a>
+    </nav>
+  </div>
+
+  <div class="wide teaser">
+    <figure class="fig">
+      <img src="{{cells}}" alt="One representative image of each of the eighteen blood cell classes after preprocessing, labelled with its corpus count.">
+      <figcaption><b>The eighteen classes.</b> One representative cell per type, with its count in the corpus. The myeloid stages along the bottom two rows differ only by gradual shifts in nuclear shape, chromatin density and granularity — there is no single feature that separates them. Counts run from 8,606 myeloblasts down to 33 reactive lymphocytes.</figcaption>
+    </figure>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+<section>
+  <p class="eyebrow">Abstract</p>
+  <p class="lede">Blood cell classifiers usually throw away two things the clinical problem gives them for free: the cell types are not unrelated labels but branches of a developmental tree, and the rare types that matter most diagnostically are the ones a normally trained model learns worst.</p>
+  <p>This dissertation asks whether making a classifier lineage-aware, and training it under an imbalance-robust objective, improves fine-grained classification of rare blood cell types against a flat transfer-learning baseline. Using MLL23 — 41,621 expert-annotated images across 18 classes at an imbalance ratio of 261:1 — a shared pretrained backbone feeds a lineage head and a cell-type head, coupled by a class-balanced hierarchical loss. Four configurations were trained under identical partitions and backbones at three seeds each and compared by paired testing with reported effect sizes.</p>
+  <p>The hierarchical model reached a test macro F1 of 0.879 against 0.874 for the baseline, and a minority-class macro F1 of 0.840 against 0.823 — improving the rare classes by more than the overall average, which is the predicted direction. Aggregate differences were not significant at three seeds, but the model significantly reduced <em>cross-lineage</em> error, the clinically severe category. Removing the imbalance term cost 0.060 minority macro F1, an order of magnitude more than the hierarchy contributed.</p>
+</section>
+
+<section>
+  <div class="stats">
+    <div class="stat"><span class="n">41,621</span><span class="l">expert-annotated single-cell images</span></div>
+    <div class="stat"><span class="n">18</span><span class="l">cell types across 3 lineages</span></div>
+    <div class="stat"><span class="n">261:1</span><span class="l">imbalance, largest to smallest class</span></div>
+    <div class="stat"><span class="n">0.879</span><span class="l">test macro F1, proposed model</span></div>
+  </div>
+</section>
+
+<hr>
+
+<section>
+  <p class="eyebrow">The problem</p>
+  <h2>Accuracy hides exactly the failure that matters</h2>
+  <p>A model trained on this corpus can abandon its rarest class completely and lose under 0.1% of accuracy. That is not a hypothetical. In this study the arm that scored <em>highest</em> on accuracy (0.9602) scored <em>lowest</em> on minority-class F1 (0.7799) — it bought its headline number by giving up on the tail.</p>
+  <p>That is why macro F1 and balanced accuracy are the headline metrics here, and why every result below is reported for the rare classes separately.</p>
+</section>
+
+<section>
+  <figure class="fig">
+    <img src="{{dist}}" alt="Class distribution on linear and logarithmic axes, coloured by haematopoietic lineage.">
+    <figcaption><b>A genuinely long tail.</b> The same distribution on linear (left) and logarithmic (right) axes. On the linear axis the four rarest classes are visually indistinguishable from zero — which is roughly how a frequency-weighted loss treats them. The imbalance is left intact and handled in the objective, never resampled away, because it is the subject of the study.</figcaption>
+  </figure>
+</section>
+
+<hr>
+
+<section>
+  <p class="eyebrow">Method</p>
+  <h2>One backbone, two heads, one coupled objective</h2>
+  <p>A pretrained ViT-Small/16 backbone produces a pooled representation that feeds two linear heads — one predicting lineage (3 classes), one predicting cell type (18 classes). They train jointly, so the coarse decision shapes the shared representation and rare types can borrow strength from their lineage neighbours.</p>
+  <p>The lineage head is a <em>regulariser, not a gate.</em> A hard gate that routed each cell to a per-lineage sub-classifier would assume the lineages form separable clusters. They do not: on frozen features the lineage silhouette coefficient is approximately zero, while nearest-neighbour lineage agreement is 0.78 against a 0.45 chance baseline. The structure is real but local, so the coupling is soft.</p>
+  <figure class="fig">
+    <img src="{{architecture}}" alt="Pipeline diagram: images pass through preprocessing into a pretrained backbone feeding a lineage head and a fine cell-type head, joined by a class-balanced hierarchical loss that backpropagates into the backbone.">
+    <figcaption><b>The pipeline.</b> A single composite loss — class-balanced weighting, focal modulation, and a consistency term tying the fine posterior to the lineage prediction — backpropagates through both heads into the shared trunk. Every experimental arm is this same implementation with different flags, never a separate script.</figcaption>
+  </figure>
+</section>
+
+<hr>
+
+<section>
+  <p class="eyebrow">Results</p>
+  <h2>The imbalance objective does the heavy lifting</h2>
+  <figure class="fig">
+    <img src="{{arms}}" alt="Dot plot of overall and minority-class F1 for four experimental arms, with error bars spanning one standard deviation across three seeds.">
+    <figcaption><b>Two columns that must be read together.</b> On overall macro F1 (blue) the four arms are separated by 0.008 in total and their error bars overlap everywhere. On the minority classes (amber) the same four spread across 0.060, and the ordering changes. Whatever these experiments measure is invisible in the aggregate number.</figcaption>
+  </figure>
+
+  <div class="tablewrap" style="margin-top:26px">
+    <table>
+      <thead><tr><th>Arm</th><th>Accuracy</th><th>Macro F1</th><th>Minority F1</th><th>Minority recall</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td>Hierarchical (proposed)</td><td>0.9567</td><td class="win">0.8792</td><td class="win">0.8400</td><td class="win">0.7987</td></tr>
+        <tr><td>Flat baseline</td><td>0.9565</td><td>0.8742</td><td>0.8233</td><td>0.7761</td></tr>
+        <tr><td>Stain-normalised</td><td>0.9546</td><td>0.8714</td><td>0.8206</td><td>0.7753</td></tr>
+        <tr><td>No imbalance term</td><td class="lose">0.9602</td><td>0.8733</td><td class="lose">0.7799</td><td class="lose">0.7226</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:13.5px;color:var(--ink-2);margin-top:11px">Mean of three seeds. Note the last row: best accuracy, worst minority F1.</p>
+
+  <p style="margin-top:26px">Stripping out the class-balanced and focal terms costs <strong>0.076 minority recall</strong> (p = 0.024) and <strong>0.060 minority macro F1</strong> (p = 0.052) — roughly ten times what the hierarchy contributes. On this evidence the imbalance-robust objective, not the architecture, is the load-bearing component.</p>
+</section>
+
+<section>
+  <h3>Where the hierarchy actually helps</h3>
+  <figure class="fig">
+    <img src="{{perclass}}" alt="Per-class F1 dumbbell plot comparing the proposed model against the flat baseline across all eighteen classes.">
+    <figcaption><b>Not a general lift.</b> Fifteen of eighteen classes differ by 0.006 or less — the two dots sit on top of each other. The whole aggregate gain comes from reactive lymphocytes (+0.070) and neoplastic lymphocytes (+0.050): the two rarest lymphoid types, sitting in a lineage that also contains abundant typical lymphocytes and hairy cells. The effect appears exactly where rare classes have populous same-lineage neighbours to borrow from, and is absent where they do not.</figcaption>
+  </figure>
+  <p class="note">The myeloid maturation stages show no measurable benefit (mean difference &minus;0.005 against a seed standard deviation of 0.011). Their confusable neighbours share their lineage label, so lineage supervision cannot separate them even in principle.</p>
+</section>
+
+<hr>
+
+<section>
+  <p class="eyebrow">Principal finding</p>
+  <h2>Errors travel one step along the maturation chain</h2>
+  <p>Neutrophil development is an ordered sequence, and the labels cut it into six discrete classes:</p>
+  <div class="chain">
+    <b>myeloblast</b><span class="arrow">&rarr;</span><b>promyelocyte</b><span class="arrow">&rarr;</span><b>myelocyte</b><span class="arrow">&rarr;</span><b>metamyelocyte</b><span class="arrow">&rarr;</span><b>band</b><span class="arrow">&rarr;</span><b>segmented</b>
+  </div>
+  <p>Pooling all three seeds gives 18,732 test predictions and 811 errors, 305 of them falling between two classes inside that chain. Scoring each by how many developmental stages separate truth from prediction produces an unusually clean answer.</p>
+  <figure class="fig">
+    <img src="{{stage}}" alt="Bar chart of signed maturation-stage distance for errors inside the neutrophil chain: 39.3% at minus one stage, 57.0% at plus one, and under 3% at two stages in either direction.">
+    <figcaption><b>96.4% of chain errors are off by exactly one stage,</b> and none by more than two. Promyelocytes are called myelocytes in 88% of their errors; metamyelocytes go to band neutrophils or myelocytes in 100% of theirs. Counted against every mistake the model makes, adjacent-stage confusions are 36% of all errors.</figcaption>
+  </figure>
+  <p>Over a third of all errors are the mildest kind available, and the training objective charges each of them exactly what it charges for calling a lymphocyte a myeloblast. Nothing in the loss, and nothing in macro F1, knows these six classes lie in an order — which is the clearest opening the results leave for further work.</p>
+  <p class="note">Myeloblasts are the exception that confirms the reading: their errors leave the chain entirely, going to typical lymphocytes (47%) and monocytes (22%). Telling blasts from lymphocytes is a separate and clinically graver problem that ordinal reasoning would not touch.</p>
+</section>
+
+<hr>
+
+<section>
+  <p class="eyebrow">Interpretability</p>
+  <h2>The model looks at the cell, not the background</h2>
+  <figure class="fig">
+    <img src="{{gradcam}}" alt="Grad-CAM saliency maps over twelve cells, each labelled with its true and predicted class.">
+    <figcaption><b>Grad-CAM over the fine head.</b> Attention settles on the cell body — nucleus, chromatin texture, cytoplasmic boundary — and not on the surrounding red cells or empty field. The misclassified reactive lymphocyte is instructive: saliency is correctly placed, so the failure is one of discrimination, not attention. For a class with 23 training images, that is the expected failure mode.</figcaption>
+  </figure>
+  <p style="font-size:14.5px;color:var(--ink-2)">Producing these on a Vision Transformer takes care. The classifier reads only the class token, so patch-token gradients at the final block are exactly zero and naive Grad-CAM returns a blank map that still looks like a real figure. Saliency is computed at the input to the final block's attention instead.</p>
+</section>
+
+<hr>
+
+<section>
+  <p class="eyebrow">Resources</p>
+  <h2>Data, code and documents</h2>
+  <div class="res">
+    <a href="https://doi.org/10.5281/zenodo.14277609">
+      <span class="t">MLL23 dataset &mdash; Zenodo</span>
+      <span class="d">10.5281/zenodo.14277609</span>
+    </a>
+    <a href="https://www.nature.com/articles/s41597-025-06223-x">
+      <span class="t">MLL23 data descriptor &mdash; Scientific Data</span>
+      <span class="d">10.1038/s41597-025-06223-x</span>
+    </a>
+    <a href="https://github.com/Nishan-Charlie/Blood-Cells_Classification">
+      <span class="t">Implementation &mdash; GitHub</span>
+      <span class="d">src/ &middot; notebooks/ &middot; scripts/</span>
+    </a>
+    <a href="https://github.com/Nishan-Charlie/Blood-Cells_Classification/tree/main/docs/thesis">
+      <span class="t">Dissertation and methodology chapter</span>
+      <span class="d">docs/thesis/</span>
+    </a>
+    <a href="https://github.com/Nishan-Charlie/Blood-Cells_Classification/tree/main/docs/slides">
+      <span class="t">Proposal and progress slides</span>
+      <span class="d">docs/slides/</span>
+    </a>
+    <a href="https://github.com/Nishan-Charlie/Blood-Cells_Classification/tree/main/results">
+      <span class="t">Per-run results and per-class metrics</span>
+      <span class="d">results/*.csv</span>
+    </a>
+  </div>
+  <p style="font-size:14px;color:var(--ink-2);margin-top:16px">The corpus is CC BY 4.0 and redistributable from Zenodo; it is not mirrored in the repository. Trained weights are excluded for size. Everything needed to reproduce the runs — splits, configurations, and the full result tables — is tracked.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Citation</p>
+  <h2>BibTeX</h2>
+<pre><span class="k">@mastersthesis</span>{karthigesu2026lineage,
+  <span class="k">title</span>   = {Lineage-Aware Hierarchical Deep Learning for Imbalanced
+             Multi-Class Classification of Peripheral Blood Cells},
+  <span class="k">author</span>  = {Karthigesu, Arthiga},
+  <span class="k">year</span>    = {2026},
+  <span class="k">type</span>    = {MSc dissertation},
+  <span class="k">school</span>  = {},
+  <span class="k">note</span>    = {Code: github.com/Nishan-Charlie/Blood-Cells_Classification}
+}</pre>
+  <p style="font-size:14px;color:var(--ink-2);margin-top:14px">Please also cite the dataset: Shetab Boushehri <em>et al.</em> (2025), &ldquo;A large expert-annotated single-cell peripheral blood dataset for hematological disease diagnostics,&rdquo; <em>Scientific Data</em> 12, 1773.</p>
+</section>
+
+<footer>
+  <p><strong style="color:var(--ink-2)">Arthiga Karthigesu</strong> &middot; MSc Computer Science &middot; 2026</p>
+  <p>Built on the MLL23 corpus from the Munich Leukemia Laboratory, released under CC BY 4.0.</p>
+  <p>Results from a completed 12-run matrix: four configurations &times; three seeds, 24.2 GPU-hours on a single RTX 4070 Laptop.</p>
+</footer>
+
+</div>
+</main>
