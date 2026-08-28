@@ -48,6 +48,13 @@ Five experiments, one backbone (ViT-Small/16), identical splits, three training 
 | − imbalance term | 0.8733 ± 0.0093 | 0.8620 | 0.7799 | 0.7226 | **0.0104** |
 | Stain-normalised (Reinhard) | 0.8714 ± 0.0031 | 0.8832 | 0.8206 | 0.7753 | 0.0127 |
 
+![Dot plot of overall and minority-class F1 for the four experimental arms, with error bars spanning one standard deviation across three seeds](artifacts/fig_arm_comparison.png)
+
+<sub>The two columns have to be read together. On overall macro F1 the four arms are separated by
+0.008 in total and their error bars overlap everywhere; on the minority classes the same four
+spread across 0.060 and the ordering changes. Note the last table row: removing the imbalance term
+gives the **best accuracy** of any arm (0.9602) and the **worst** minority F1 (0.7799).</sub>
+
 ### What the evidence supports
 
 **The hierarchical model is best on every metric the research question concerns**, and the
@@ -67,14 +74,16 @@ seeds**. Four metrics moving the same direction with moderate-to-large effect si
 suggestive, but this study does not establish the hierarchy's benefit at conventional
 significance.
 
-**The imbalance-robust objective is the dominant component.** Removing it costs 0.053
-minority recall (p = 0.058, d = −2.28) and 0.021 balanced accuracy (p = 0.080, d = −1.92) —
-consistently the largest effects in the study, and several times the hierarchy's own
-contribution. The dissertation's title leads with the hierarchy, but the imbalance treatment
+**The imbalance-robust objective is the dominant component.** Removing it costs 0.076
+minority recall (p = 0.024, d = −3.67) and 0.032 balanced accuracy (p = 0.028, d = −3.37) —
+the largest effects in the study by a wide margin, and roughly an order of magnitude beyond
+the hierarchy's own contribution. These are also the only method comparisons that clear
+p < 0.05. The dissertation's title leads with the hierarchy, but the imbalance treatment
 is doing most of the work.
 
-**Stain normalisation has no measurable effect** (balanced accuracy 0.8832 vs 0.8832; every
-comparison p > 0.7).
+**Stain normalisation did not help.** Against the flat baseline it is indistinguishable
+(balanced accuracy 0.8832 vs 0.8832, p = 1.00); against the proposed model it is consistently
+worse on every metric (macro F1 −0.008, minority F1 −0.019) though never significantly.
 
 **Cross-lineage error is the only p < 0.05 result** (hierarchical vs flat, p = 0.0198,
 d = −4.04) — but read the magnitude before the p-value: 0.0115 vs 0.0119 is a difference of
@@ -90,7 +99,7 @@ Removing the imbalance term changes:
 macro precision   +0.0170     ← rises
 macro recall      −0.0316     ← falls
                   ─────────
-macro F1          −0.0059     ← cancels out  (p = 0.90)
+macro F1          −0.0059     ← cancels out  (p = 0.44)
 balanced accuracy −0.0316     ← no cancellation (it IS macro recall)
 plain accuracy    +0.0035     ← rises
 ```
@@ -98,7 +107,7 @@ plain accuracy    +0.0035     ← rises
 Without class re-weighting the model becomes conservative about rare classes: recall falls,
 but precision *rises* because it makes fewer false positives. F1 is the harmonic mean, so the
 two effects partially cancel and **macro F1 is nearly blind to the intervention** — it reports
-−0.006 (p = 0.90) where minority recall reports −0.053 (d = −2.28). Balanced accuracy is macro
+−0.006 (p = 0.44) where minority recall reports −0.076 (d = −3.67). Balanced accuracy is macro
 recall, so nothing cancels.
 
 Two consequences:
@@ -345,20 +354,36 @@ src/
   gradcam.py      saliency over the final backbone stage (ViT-aware)
   viz.py          figures for the write-up
 scripts/
-  build_caches.py     one-time cache build; idempotent
-  make_notebooks.py   regenerates notebooks 03-05 from source
+  build_caches.py                one-time cache build; idempotent
+  make_notebooks.py              regenerates notebooks 03-05 from source
+  analyse_maturation_adjacency.py  stage-distance analysis of myeloid errors
+  build_project_page.py          builds docs/index.html + docs/artifact.html
+  build_dissertation/            python-docx build of the dissertation
 notebooks/
   01_data_preparation.ipynb    acquire, verify, split
   02_dataset_analysis.ipynb    hierarchy tests, stain norm, duplicates, augmentation
   03_model_and_training.ipynb  architecture, loss checks, overfitting test
   04_experiments.ipynb         backbone screen + five arms + significance
   05_evaluation.ipynb          confusion matrices, per-class, Grad-CAM
-results/        summary.csv (one row per run) + history_*.csv (per epoch)
-checkpoints/    best.pt per run, selected on validation macro F1
+docs/
+  index.html      project page, self-contained (GitHub Pages entry point)
+  thesis/         Dissertation.docx + Methodology, Literature_Review (.tex/.pdf)
+  slides/         proposal and progress decks (.tex/.pdf)
+  assets/         hand-drawn figure PDFs the LaTeX sources include
+  specs/          modelling-pipeline design spec
+results/        summary.csv (one row per run), history_*.csv, per-class tables
+artifacts/       generated figures
 archive/        v1_baseline/ - the superseded first matrix, kept as evidence
-artifacts/      generated figures
-docs/           design specs
+checkpoints/    best.pt per run, selected on validation macro F1  (gitignored)
 ```
+
+`docs/thesis/Dissertation.docx` is **generated, not hand-edited** — rebuild it with
+`python scripts/build_dissertation/build.py` after editing the chapter modules, or your
+changes will be overwritten.
+
+Not in version control, with reasons recorded in `.gitignore`: the corpus and caches, model
+weights, `references/` (third-party course handouts), and the 1.7 GB of superseded v1 weights.
+The v1 *result CSVs* under `archive/` **are** tracked on purpose — the write-up argues from them.
 
 [hierarchy.py](src/hierarchy.py) is the keystone — it declares the class indices, the lineage
 mapping, and the published per-class counts. Its module-level `_validate()` runs at import and
@@ -369,7 +394,7 @@ fails loudly if the invariants break.
 ## Five traps worth knowing
 
 Each of these ran fine while being wrong. All are commented at their site in the code and
-detailed in [the design spec](docs/superpowers/specs/2026-08-01-modelling-pipeline-design.md).
+detailed in [the design spec](docs/specs/2026-08-01-modelling-pipeline-design.md).
 
 1. **Mixed precision must be bf16, not fp16.** An fp16 run reached val macro F1 0.80, then went
    NaN at epoch 3 and never recovered. Related: the `clamp_min(1e-8)` guard in the consistency

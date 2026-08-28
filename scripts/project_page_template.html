@@ -3,12 +3,17 @@
 
 <style>
 :root{
-  --ground:#faf8f7; --surface:#ffffff; --surface-2:#f4f1f6;
-  --ink:#191320; --ink-2:#5d5566; --ink-3:#8b8394;
-  --stain:#6d3f97; --stain-soft:#f0eaf7;
-  --rule:#e7e2ea; --rule-2:#f0ecf2;
-  --blue:#0072B2; --amber:#E69F00;
-  --maxw:768px;
+  /* Paper: a warm brownish white, the tone of uncoated book stock. The accent
+     stays Pappenheim violet (the actual dye colour of the stain), so the page
+     reads as paper-and-ink rather than the usual cream-and-terracotta. */
+  --ground:#f4efe6; --surface:#fbf8f2; --surface-2:#ece5d8;
+  --ink:#211b17; --ink-2:#5f564d; --ink-3:#8d8377;
+  --stain:#6b3f8f; --stain-soft:#ede4f2;
+  --rule:#ddd4c5; --rule-2:#e8e0d2;
+  --blue:#0072B2; --amber:#B5730B;
+  --maxw:760px;      /* running text column */
+  --figw:960px;      /* figures, deliberately wider than the text */
+  --pad:32px;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
