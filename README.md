@@ -10,6 +10,21 @@ that a flat classifier tends to ignore.
 
 This repository holds both the implementation and the written dissertation sources.
 
+![One representative image of each of the eighteen blood cell classes after preprocessing, labelled with its count in the corpus](artifacts/class_examples.png)
+
+<sub>**The task.** One representative cell per class, with its count in the corpus. The myeloid
+stages along the lower rows differ only by gradual shifts in nuclear shape, chromatin density and
+granularity — no single feature separates them. Counts run from 8,606 myeloblasts down to 33
+reactive lymphocytes.</sub>
+
+<table>
+<tr><td><b>Dataset</b></td><td>MLL23 — 41,621 images, 18 classes · <a href="https://doi.org/10.5281/zenodo.14277609">10.5281/zenodo.14277609</a> (CC BY 4.0)</td></tr>
+<tr><td><b>Backbone</b></td><td>ViT-Small/16, ImageNet-pretrained, fine-tuned at 224×224</td></tr>
+<tr><td><b>Headline</b></td><td>Test macro F1 <b>0.879</b> · minority-class macro F1 <b>0.840</b></td></tr>
+<tr><td><b>Compute</b></td><td>24.2 GPU-hours for the full 12-run matrix, single RTX 4070 Laptop (8 GB)</td></tr>
+<tr><td><b>Project page</b></td><td><code>docs/index.html</code> — self-contained, deployable to GitHub Pages</td></tr>
+</table>
+
 ---
 
 ## Research question
@@ -242,13 +257,46 @@ per-variant scripts.
 
 ---
 
+## Requirements
+
+Verified on the environment below. The versions are not aspirational — they are what the
+reported results were produced on.
+
+| | Version | Note |
+|---|---|---|
+| **Python** | **3.12.3** (CPython) | 3.10+ should work; 3.12 is what is tested |
+| **PyTorch** | 2.6.0+cu124 | CUDA 12.4 build |
+| **torchvision** | 0.21.0 | supplies `transforms.v2`, RandAugment, CutMix |
+| **timm** | 1.0.16 | backbone zoo |
+| NumPy | 2.3.5 | pinned `<2.4` — `umap-learn` downgrades anything newer |
+| pandas · scikit-learn · SciPy | 2.2.3 · 1.7.0 · 1.16.0 | SciPy supplies the paired *t*-tests |
+| Pillow · matplotlib | 12.2.0 · 3.10.3 | |
+| python-docx | 1.2.0 | only for `scripts/build_dissertation/` |
+
+**Hardware used:** NVIDIA RTX 4070 Laptop, 8 GB VRAM, Windows 11. The 8 GB ceiling sets the
+batch size of 64; nothing here needs a larger card, only more time.
+
+`torch` and `torchvision` carry a `+cu124` local tag and will not resolve from PyPI. Install
+them from the PyTorch index first:
+
+```bash
+conda create -n mll23 python=3.12 && conda activate mll23
+pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt
+```
+
+CPU-only works for everything except training — drop the `--index-url` line and expect the
+experiment matrix to be impractical.
+
+**Storage.** The corpus is ~10 GB extracted and the decoded-image caches another ~21 GB, so
+budget **~31 GB on a non-system drive**. Data location is set by `MLL23_ROOT` and defaults to
+`D:\MLL23`; neither the corpus nor the caches are ever written into the repository.
+
+---
+
 ## Quick start
 
 ```bash
-# Environment (conda): Python 3.10, torch 2.6.0+cu124, timm 1.0.27
-conda activate mri-diffuser
-pip install -r requirements.txt
-
 # 1. Fetch the corpus (~9.1 GB of archives). Resumable and idempotent.
 python -c "from src.download import download_all; download_all()"
 
